@@ -1,0 +1,50 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
+plugins {
+  kotlin("jvm")
+  `maven-publish`
+}
+
+val mindustryVersion = "v154"
+val arcVersion = "v154"
+
+publishing {
+  publications {
+    create<MavenPublication>("maven") {
+      from(components["java"])
+
+      groupId = "com.github.EB-wilson.UniverseKit"
+      artifactId = project.name
+      version = "${rootProject.version}"
+    }
+  }
+}
+
+repositories {
+  mavenLocal()
+  mavenCentral()
+}
+
+dependencies {
+  implementation(kotlin("stdlib-jdk8"))
+  implementation(kotlin("reflect"))
+
+  implementation(project(":platform:expects"))
+  implementation(project(":platform:android"))
+  implementation(project(":platform:android29"))
+  implementation(project(":platform:desktop"))
+  implementation(project(":platform:desktop9"))
+}
+
+java {
+  sourceCompatibility = JavaVersion.VERSION_1_8
+  targetCompatibility = JavaVersion.VERSION_1_8
+}
+
+kotlin {
+  jvmToolchain(21)
+  
+  compilerOptions {
+    jvmTarget.set(JvmTarget.JVM_1_8)
+  }
+}

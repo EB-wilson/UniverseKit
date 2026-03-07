@@ -1,0 +1,386 @@
+/*
+ * Copyright (C) 2021-2025 LSPosed
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package universe.util;
+
+import android.os.Build;
+import android.util.Log;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.annotation.RequiresApi;
+import dalvik.system.VMRuntime;
+import sun.misc.Unsafe;
+
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.reflect.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+
+@RequiresApi(Build.VERSION_CODES.P)
+public final class HiddenApiBypass {
+    private static final String TAG = "HiddenApiBypass";
+    private static final Unsafe unsafe;
+    private static final long methodOffset;
+    private static final long classOffset;
+    private static final long artOffset;
+    private static final long methodsOffset;
+    private static final long iFieldOffset;
+    private static final long sFieldOffset;
+    private static final long artMethodSize;
+    private static final long artMethodBias;
+    private static final long artFieldSize;
+    private static final long artFieldBias;
+
+    static {
+        try {
+            unsafe = (Unsafe) Unsafe.class.getDeclaredMethod("getUnsafe").invoke(null);
+            long[] data = Helper.getCachedOffsetData();
+            if (data == null) {
+                data = readOffsetDataIO();
+                Helper.setCachedOffsetData(data);
+            }
+            methodOffset = data[0];
+            classOffset = data[1];
+            artOffset = data[2];
+            methodsOffset = data[3];
+            iFieldOffset = data[4];
+            sFieldOffset = data[5];
+            long[] dataRT = readOffsetDataRT();
+            artMethodSize = dataRT[0];
+            artMethodBias = dataRT[1];
+            artFieldSize = dataRT[2];
+            artFieldBias = dataRT[3];
+        } catch (ReflectiveOperationException e) {
+            Log.e(TAG, "Initialize error", e);
+            throw new ExceptionInInitializerError(e);
+        }
+    }
+
+    private static long[] readOffsetDataIO() throws ReflectiveOperationException {
+        ClassLoader bootClassloader = new CoreOjClassLoader();
+        Class<?> executableClass = bootClassloader.loadClass(Executable.class.getName());
+        Class<?> methodHandleClass = bootClassloader.loadClass(MethodHandle.class.getName());
+        Class<?> classClass = bootClassloader.loadClass(Class.class.getName());
+        long methodOffset = unsafe.objectFieldOffset(executableClass.getDeclaredField("artMethod"));
+        long classOffset = unsafe.objectFieldOffset(executableClass.getDeclaredField("declaringClass"));
+        long artOffset = unsafe.objectFieldOffset(methodHandleClass.getDeclaredField("artFieldOrMethod"));
+        long methodsOffset = unsafe.objectFieldOffset(classClass.getDeclaredField("methods"));
+
+        long iFieldOffset;
+        long sFieldOffset;
+        try {
+            iFieldOffset = unsafe.objectFieldOffset(classClass.getDeclaredField("fields"));
+            sFieldOffset = iFieldOffset;
+        } catch (NoSuchFieldException e) {
+            iFieldOffset = unsafe.objectFieldOffset(classClass.getDeclaredField("iFields"));
+            sFieldOffset = unsafe.objectFieldOffset(classClass.getDeclaredField("sFields"));
+        }
+
+        long[] data = new long[6];
+        data[0] = methodOffset;
+        data[1] = classOffset;
+        data[2] = artOffset;
+        data[3] = methodsOffset;
+        data[4] = iFieldOffset;
+        data[5] = sFieldOffset;
+        return data;
+    }
+
+    private static long[] readOffsetDataRT() throws ReflectiveOperationException {
+        Method mA = Helper.NeverCall.class.getDeclaredMethod("a");
+        Method mB = Helper.NeverCall.class.getDeclaredMethod("b");
+        mA.setAccessible(true);
+        mB.setAccessible(true);
+        MethodHandle mhA = MethodHandles.lookup().unreflect(mA);
+        MethodHandle mhB = MethodHandles.lookup().unreflect(mB);
+        long aAddr = unsafe.getLong(mhA, artOffset);
+        long bAddr = unsafe.getLong(mhB, artOffset);
+        long aMethods = unsafe.getLong(Helper.NeverCall.class, methodsOffset);
+        long artMethodSize = bAddr - aAddr;
+        long artMethodBias = aAddr - aMethods - artMethodSize;
+
+        Field fI = Helper.NeverCall.class.getDeclaredField("i");
+        Field fJ = Helper.NeverCall.class.getDeclaredField("j");
+        fI.setAccessible(true);
+        fJ.setAccessible(true);
+        MethodHandle mhI = MethodHandles.lookup().unreflectGetter(fI);
+        MethodHandle mhJ = MethodHandles.lookup().unreflectGetter(fJ);
+        long iAddr = unsafe.getLong(mhI, artOffset);
+        long jAddr = unsafe.getLong(mhJ, artOffset);
+        long iFields = unsafe.getLong(Helper.NeverCall.class, iFieldOffset);
+        long artFieldSize = jAddr - iAddr;
+        long artFieldBias = iAddr - iFields;
+
+        long[] data = new long[4];
+        data[0] = artMethodSize;
+        data[1] = artMethodBias;
+        data[2] = artFieldSize;
+        data[3] = artFieldBias;
+        return data;
+    }
+
+    /**
+     * create an instance of the given class {@code clazz} calling the restricted constructor with arguments {@code args}
+     *
+     * @param clazz    the class of the instance to new
+     * @param initargs arguments to call constructor
+     * @return the new instance
+     * @see Constructor#newInstance(Object...)
+     */
+    public static Object newInstance(@NonNull Class<?> clazz, Object... initargs) throws NoSuchMethodException, IllegalAccessException, InvocationTargetException, InstantiationException {
+        Method stub = Helper.InvokeStub.class.getDeclaredMethod("invoke", Object[].class);
+        Constructor<?> ctor = Helper.InvokeStub.class.getDeclaredConstructor(Object[].class);
+        ctor.setAccessible(true);
+        long methods = unsafe.getLong(clazz, methodsOffset);
+        if (methods == 0) throw new NoSuchMethodException("Cannot find matching constructor");
+        int numMethods = unsafe.getInt(methods);
+        for (int i = 0; i < numMethods; i++) {
+            long method = methods + i * artMethodSize + artMethodBias;
+            unsafe.putLong(stub, methodOffset, method);
+            if ("<init>".equals(stub.getName())) {
+                unsafe.putLong(ctor, methodOffset, method);
+                Class<?>[] params = ctor.getParameterTypes();
+                if (Helper.checkArgsForInvokeMethod(params, initargs)) {
+                    unsafe.putObject(ctor, classOffset, clazz);
+                    return ctor.newInstance(initargs);
+                }
+            }
+        }
+        throw new NoSuchMethodException("Cannot find matching constructor");
+    }
+
+    /**
+     * invoke a restrict method named {@code methodName} of the given class {@code clazz} with this object {@code thiz} and arguments {@code args}
+     *
+     * @param clazz      the class call the method on (this parameter is required because this method cannot call inherit method)
+     * @param thiz       this object, which can be {@code null} if the target method is static
+     * @param methodName the method name
+     * @param args       arguments to call the method with name {@code methodName}
+     * @return the return value of the method
+     * @see Method#invoke(Object, Object...)
+     */
+    public static Object invoke(@NonNull Class<?> clazz, @Nullable Object thiz, @NonNull String methodName, Object... args) throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
+        Method stub = Helper.InvokeStub.class.getDeclaredMethod("invoke", Object[].class);
+        stub.setAccessible(true);
+        long methods = unsafe.getLong(clazz, methodsOffset);
+        if (methods == 0) throw new NoSuchMethodException("Cannot find matching method");
+        int numMethods = unsafe.getInt(methods);
+        for (int i = 0; i < numMethods; i++) {
+            long method = methods + i * artMethodSize + artMethodBias;
+            unsafe.putLong(stub, methodOffset, method);
+            if (methodName.equals(stub.getName())) {
+                Class<?>[] params = stub.getParameterTypes();
+                if (Helper.checkArgsForInvokeMethod(params, args))
+                    return stub.invoke(thiz, args);
+            }
+        }
+        throw new NoSuchMethodException("Cannot find matching method");
+    }
+
+    /**
+     * get declared methods of given class without hidden api restriction
+     *
+     * @param clazz the class to fetch declared methods (including constructors with name `&lt;init&gt;`)
+     * @return list of declared methods of {@code clazz}
+     */
+    @NonNull
+    public static List<Executable> getDeclaredMethods(@NonNull Class<?> clazz) {
+        if (clazz.isPrimitive() || clazz.isArray()) return Collections.emptyList();
+        MethodHandle mh;
+        try {
+            Method mA = Helper.NeverCall.class.getDeclaredMethod("a");
+            mA.setAccessible(true);
+            mh = MethodHandles.lookup().unreflect(mA);
+        } catch (NoSuchMethodException | IllegalAccessException e) {
+            return Collections.emptyList();
+        }
+        long methods = unsafe.getLong(clazz, methodsOffset);
+        if (methods == 0) return Collections.emptyList();
+        int numMethods = unsafe.getInt(methods);
+        List<Executable> list = new ArrayList<>(numMethods);
+        for (int i = 0; i < numMethods; i++) {
+            long method = methods + i * artMethodSize + artMethodBias;
+            unsafe.putLong(mh, artOffset, method);
+            Executable member = MethodHandles.reflectAs(Executable.class, mh);
+            list.add(member);
+        }
+        return list;
+    }
+
+    /**
+     * get a restrict method named {@code methodName} of the given class {@code clazz} with argument types {@code parameterTypes}
+     *
+     * @param clazz          the class where the expected method declares
+     * @param methodName     the expected method's name
+     * @param parameterTypes argument types of the expected method with name {@code methodName}
+     * @return the found method
+     * @throws NoSuchMethodException when no method matches the given parameters
+     * @see Class#getDeclaredMethod(String, Class[])
+     */
+    @NonNull
+    public static Method getDeclaredMethod(@NonNull Class<?> clazz, @NonNull String methodName, @NonNull Class<?>... parameterTypes) throws NoSuchMethodException {
+        List<Executable> methods = getDeclaredMethods(clazz);
+        allMethods:
+        for (Executable method : methods) {
+            if (!method.getName().equals(methodName)) continue;
+            if (!(method instanceof Method)) continue;
+            Class<?>[] expectedTypes = method.getParameterTypes();
+            if (expectedTypes.length != parameterTypes.length) continue;
+            for (int i = 0; i < parameterTypes.length; ++i) {
+                if (parameterTypes[i] != expectedTypes[i]) continue allMethods;
+            }
+            return (Method) method;
+        }
+        throw new NoSuchMethodException("Cannot find matching method");
+    }
+
+    /**
+     * get a restrict constructor of the given class {@code clazz} with argument types {@code parameterTypes}
+     *
+     * @param clazz          the class where the expected constructor declares
+     * @param parameterTypes argument types of the expected constructor
+     * @return the found constructor
+     * @throws NoSuchMethodException when no constructor matches the given parameters
+     * @see Class#getDeclaredConstructor(Class[])
+     */
+    @NonNull
+    public static Constructor<?> getDeclaredConstructor(@NonNull Class<?> clazz, @NonNull Class<?>... parameterTypes) throws NoSuchMethodException {
+        List<Executable> methods = getDeclaredMethods(clazz);
+        allMethods:
+        for (Executable method : methods) {
+            if (!(method instanceof Constructor)) continue;
+            Class<?>[] expectedTypes = method.getParameterTypes();
+            if (expectedTypes.length != parameterTypes.length) continue;
+            for (int i = 0; i < parameterTypes.length; ++i) {
+                if (parameterTypes[i] != expectedTypes[i]) continue allMethods;
+            }
+            return (Constructor<?>) method;
+        }
+        throw new NoSuchMethodException("Cannot find matching constructor");
+    }
+
+
+    /**
+     * get declared non-static fields of given class without hidden api restriction
+     *
+     * @param clazz the class to fetch declared methods
+     * @return list of declared non-static fields of {@code clazz}
+     */
+    @NonNull
+    public static List<Field> getInstanceFields(@NonNull Class<?> clazz) {
+        if (clazz.isPrimitive() || clazz.isArray()) return Collections.emptyList();
+        MethodHandle mh;
+        try {
+            Field fI = Helper.NeverCall.class.getDeclaredField("i");
+            fI.setAccessible(true);
+            mh = MethodHandles.lookup().unreflectGetter(fI);
+        } catch (IllegalAccessException | NoSuchFieldException e) {
+            return Collections.emptyList();
+        }
+        long fields = unsafe.getLong(clazz, iFieldOffset);
+        if (fields == 0) return Collections.emptyList();
+        int numFields = unsafe.getInt(fields);
+        List<Field> list = new ArrayList<>(numFields);
+        for (int i = 0; i < numFields; i++) {
+            long field = fields + i * artFieldSize + artFieldBias;
+            unsafe.putLong(mh, artOffset, field);
+            Field member = MethodHandles.reflectAs(Field.class, mh);
+            if (!Modifier.isStatic(member.getModifiers()))
+                list.add(member);
+        }
+        return list;
+    }
+
+    /**
+     * get declared static fields of given class without hidden api restriction
+     *
+     * @param clazz the class to fetch declared methods
+     * @return list of declared static fields of {@code clazz}
+     */
+    @NonNull
+    public static List<Field> getStaticFields(@NonNull Class<?> clazz) {
+        if (clazz.isPrimitive() || clazz.isArray()) return Collections.emptyList();
+        MethodHandle mh;
+        try {
+            Field fS = Helper.NeverCall.class.getDeclaredField("s");
+            fS.setAccessible(true);
+            mh = MethodHandles.lookup().unreflectGetter(fS);
+        } catch (IllegalAccessException | NoSuchFieldException e) {
+            return Collections.emptyList();
+        }
+        long fields = unsafe.getLong(clazz, sFieldOffset);
+        if (fields == 0) return Collections.emptyList();
+        int numFields = unsafe.getInt(fields);
+        List<Field> list = new ArrayList<>(numFields);
+        for (int i = 0; i < numFields; i++) {
+            long field = fields + i * artFieldSize + artFieldBias;
+            unsafe.putLong(mh, artOffset, field);
+            Field member = MethodHandles.reflectAs(Field.class, mh);
+            if (Modifier.isStatic(member.getModifiers()))
+                list.add(member);
+        }
+        return list;
+    }
+
+    /**
+     * Sets the list of exemptions from hidden API access enforcement.
+     *
+     * @param signaturePrefixes A list of class signature prefixes. Each item in the list is a prefix match on the type
+     *                          signature of a blacklisted API. All matching APIs are treated as if they were on
+     *                          the whitelist: access permitted, and no logging..
+     * @return whether the operation is successful
+     */
+    public static boolean setHiddenApiExemptions(@NonNull String... signaturePrefixes) {
+        try {
+            Object runtime = invoke(VMRuntime.class, null, "getRuntime");
+            invoke(VMRuntime.class, runtime, "setHiddenApiExemptions", (Object) signaturePrefixes);
+            return true;
+        } catch (ReflectiveOperationException e) {
+            Log.w(TAG, "setHiddenApiExemptions", e);
+            return false;
+        }
+    }
+
+    /**
+     * Adds the list of exemptions from hidden API access enforcement.
+     *
+     * @param signaturePrefixes A list of class signature prefixes. Each item in the list is a prefix match on the type
+     *                          signature of a blacklisted API. All matching APIs are treated as if they were on
+     *                          the whitelist: access permitted, and no logging..
+     * @return whether the operation is successful
+     */
+    public static boolean addHiddenApiExemptions(String... signaturePrefixes) {
+        Helper.signaturePrefixes.addAll(Arrays.asList(signaturePrefixes));
+        String[] strings = new String[Helper.signaturePrefixes.size()];
+        Helper.signaturePrefixes.toArray(strings);
+        return setHiddenApiExemptions(strings);
+    }
+
+    /**
+     * Clear the list of exemptions from hidden API access enforcement.
+     * Android runtime will cache access flags, so if a hidden API has been accessed unrestrictedly,
+     * running this method will not restore the restriction on it.
+     *
+     * @return whether the operation is successful
+     */
+    public static boolean clearHiddenApiExemptions() {
+        Helper.signaturePrefixes.clear();
+        return setHiddenApiExemptions();
+    }
+}
