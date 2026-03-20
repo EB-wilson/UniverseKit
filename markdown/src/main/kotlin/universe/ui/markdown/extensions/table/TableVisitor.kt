@@ -8,9 +8,9 @@ import org.commonmark.ext.gfm.tables.TableRow
 import org.commonmark.node.Visitor
 
 interface TableVisitor: Visitor {
-  fun visit(visitor: TableBlock)
-  fun visit(visitor: TableHead)
-  fun visit(visitor: TableBody)
-  fun visit(visitor: TableRow)
-  fun visit(visitor: TableCell)
+  fun visit(block: TableBlock)
+  fun visit(head: TableHead)
+  fun visit(body: TableBody)
+  fun visit(row: TableRow)
+  fun visit(cell: TableCell)
 }

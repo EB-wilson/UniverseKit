@@ -11,11 +11,11 @@ class MDLayoutRenderer private constructor(builder: Builder) {
   init {
     val factories = mutableListOf<DrawRendererFactory<*>>()
     factories.addAll(builder.nodeRendererFactories)
-    factories.add(DrawRendererFactory<BaseProvider> { context, provider -> BaseDrawRenderer(context) })
+    factories.add(DrawRendererFactory(::BaseDrawRenderer))
     nodeRendererFactories = factories.toList()
   }
 
-  fun createContext(element: Markdown): RendererContext {
+  fun createContext(element: Markdown<*>): RendererContext {
     context = this.RendererContextImpl(element)
     return context!!
   }
@@ -33,7 +33,7 @@ class MDLayoutRenderer private constructor(builder: Builder) {
       return MDLayoutRenderer(this)
     }
 
-    fun nodeRendererFactory(nodeRendererFactory: DrawRendererFactory<*>): Builder {
+    fun <P: MarkdownProvider> nodeRendererFactory(nodeRendererFactory: DrawRendererFactory<P>): Builder {
       this.nodeRendererFactories.add(nodeRendererFactory)
       return this
     }
@@ -52,12 +52,13 @@ class MDLayoutRenderer private constructor(builder: Builder) {
     fun extend(rendererBuilder: Builder)
   }
 
-  internal inner class RendererContextImpl(element: Markdown): RendererContext(element) {
+  internal inner class RendererContextImpl(element: Markdown<*>): RendererContext(element) {
     private val nodeRendererMap: NodeRendererMap = NodeRendererMap()
 
     init {
       for (i in nodeRendererFactories.indices.reversed()) {
         val nodeRendererFactory = nodeRendererFactories[i]
+        @Suppress("UNCHECKED_CAST")
         val nodeRenderer = (nodeRendererFactory as DrawRendererFactory<MarkdownProvider>)
           .create(this, element.provider)
         nodeRendererMap.add(nodeRenderer)

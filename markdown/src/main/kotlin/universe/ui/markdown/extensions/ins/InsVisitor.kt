@@ -4,5 +4,5 @@ import org.commonmark.ext.ins.Ins
 import org.commonmark.node.Visitor
 
 interface InsVisitor: Visitor {
-  fun visit(visitor: Ins)
+  fun visit(ins: Ins)
 }

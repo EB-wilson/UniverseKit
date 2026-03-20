@@ -1,5 +1,7 @@
 package universe.ui.markdown
 
+import arc.graphics.Color
+import mindustry.ui.Fonts
 import org.commonmark.ext.gfm.strikethrough.Strikethrough
 import org.commonmark.ext.gfm.tables.TableBlock
 import org.commonmark.ext.gfm.tables.TableBody
@@ -7,6 +9,7 @@ import org.commonmark.ext.gfm.tables.TableHead
 import org.commonmark.ext.gfm.tables.TableRow
 import org.commonmark.ext.ins.Ins
 import org.commonmark.node.*
+import universe.ui.markdown.elemdraw.DrawStr.Companion.addTextWrap
 import universe.ui.markdown.extensions.curtain.Curtain
 import universe.ui.markdown.extensions.curtain.CurtainExtension
 import universe.ui.markdown.extensions.curtain.CurtainProvider
@@ -27,7 +30,12 @@ class BaseProvider: MarkdownProvider, CurtainProvider, InsProvider, Strikethroug
   )
 
   override fun RendererContext.add(node: Document) {
-    TODO("Not yet implemented")
+    //always create a root scope, set the max width.
+    withScope(
+      maxWidth = if (mdWidth <= 0) -1f else mdWidth
+    ) {
+      renderChildren(node)
+    }
   }
 
   override fun RendererContext.add(node: Heading) {
@@ -35,7 +43,8 @@ class BaseProvider: MarkdownProvider, CurtainProvider, InsProvider, Strikethroug
   }
 
   override fun RendererContext.add(node: Paragraph) {
-    TODO("Not yet implemented")
+    renderChildren(node)
+    row(mdStyle.paragraphPadding)
   }
 
   override fun RendererContext.add(node: BlockQuote) {
@@ -87,7 +96,12 @@ class BaseProvider: MarkdownProvider, CurtainProvider, InsProvider, Strikethroug
   }
 
   override fun RendererContext.add(node: Text) {
-    TODO("Not yet implemented")
+    addTextWrap(
+      str = node.literal,
+      font = getScope().font,
+      color = Color.white,
+      scl = 1f,
+    )
   }
 
   override fun RendererContext.add(node: Code) {
@@ -103,6 +117,10 @@ class BaseProvider: MarkdownProvider, CurtainProvider, InsProvider, Strikethroug
   }
 
   override fun RendererContext.add(node: HardLineBreak) {
+    TODO("Not yet implemented")
+  }
+
+  override fun RendererContext.add(node: LinkReferenceDefinition) {
     TODO("Not yet implemented")
   }
 

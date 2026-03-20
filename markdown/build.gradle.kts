@@ -33,6 +33,9 @@ dependencies {
   compileOnly("com.github.Anuken.Arc:arc-core:$arcVersion")
   compileOnly("com.github.Anuken.Mindustry:core:$mindustryVersion")
 
+  testImplementation("com.github.Anuken.Arc:arc-core:$arcVersion")
+  testImplementation("com.github.Anuken.Mindustry:core:$mindustryVersion")
+
   implementation("org.commonmark:commonmark:0.20.0")
   implementation("org.commonmark:commonmark-ext-gfm-tables:0.20.0")
   implementation("org.commonmark:commonmark-ext-gfm-strikethrough:0.20.0")
@@ -40,6 +43,12 @@ dependencies {
 
   implementation(kotlin("stdlib-jdk8"))
   implementation(kotlin("reflect"))
+}
+
+java {
+  withSourcesJar()
+  sourceCompatibility = JavaVersion.VERSION_1_8
+  targetCompatibility = JavaVersion.VERSION_1_8
 }
 
 kotlin {

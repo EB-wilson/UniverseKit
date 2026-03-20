@@ -56,12 +56,7 @@ object MarkdownStyles {
     defaultMD = temp
   }
 
-  @Deprecated("请使用makeDefault")
-  fun defaultMD(mono: Font): MarkdownStyle {
-    return makeDefault(mono)
-  }
-
-  fun makeDefault(mono: Font): MarkdownStyle {
+  private fun makeDefault(mono: Font): MarkdownStyle {
     return object : MarkdownStyle() {
       init {
         subFont = Fonts.def
@@ -85,15 +80,15 @@ object MarkdownStyles {
         lineColor = Color.gray
         linkColor = Pal.place
 
-        linesPadding = 5f
-        tablePadHor = 14f
-        tablePadVert = 10f
-        paragraphPadding = 14f
+        linesPadding = 6f
+        paragraphPadding = 20f
+        tablePadHor = 16f
+        tablePadVert = 12f
 
         board = Tex.paneLeft
         codeBack = (Tex.whiteui as TextureRegionDrawable).tint(Tmp.c1.set(Pal.darkerGray).a(0.7f))
-        codeBack!!.leftWidth = 4f
-        codeBack!!.rightWidth = 4f
+        codeBack.leftWidth = 4f
+        codeBack.rightWidth = 4f
         codeBlockBack = (Tex.whiteui as TextureRegionDrawable).tint(Tmp.c1.set(Pal.darkerGray))
         codeBlockStyle = Styles.smallPane
 

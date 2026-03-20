@@ -4,6 +4,14 @@ import org.commonmark.Extension
 import org.commonmark.node.*
 
 interface MarkdownProvider {
+  fun RendererContext.renderChildren(parent: Node){
+    var node = parent.firstChild
+    while (node != null) {
+      render(node)
+      node = node.next
+    }
+  }
+
   fun extensions(): List<Extension>
 
   fun RendererContext.add(node: Document)
