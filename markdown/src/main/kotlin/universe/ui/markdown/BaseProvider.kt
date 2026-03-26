@@ -1,131 +1,332 @@
 package universe.ui.markdown
 
-import arc.graphics.Color
-import mindustry.ui.Fonts
+import arc.Core
+import arc.graphics.Pixmap
+import arc.graphics.Texture
+import arc.graphics.g2d.TextureRegion
+import arc.math.Mathf
+import arc.scene.event.ClickListener
+import arc.scene.style.TextureRegionDrawable
+import arc.scene.ui.Button
+import arc.scene.ui.layout.Scl
+import arc.util.Log
+import arc.util.Scaling
+import mindustry.gen.Tex
 import org.commonmark.ext.gfm.strikethrough.Strikethrough
 import org.commonmark.ext.gfm.tables.TableBlock
 import org.commonmark.ext.gfm.tables.TableBody
 import org.commonmark.ext.gfm.tables.TableHead
 import org.commonmark.ext.gfm.tables.TableRow
+import org.commonmark.ext.image.attributes.ImageAttributes
 import org.commonmark.ext.ins.Ins
 import org.commonmark.node.*
-import universe.ui.markdown.elemdraw.DrawStr.Companion.addTextWrap
+import universe.ui.markdown.elemdraw.*
 import universe.ui.markdown.extensions.curtain.Curtain
 import universe.ui.markdown.extensions.curtain.CurtainExtension
 import universe.ui.markdown.extensions.curtain.CurtainProvider
+import universe.ui.markdown.extensions.imgattr.ImgAttrExtension
 import universe.ui.markdown.extensions.ins.InsExtension
 import universe.ui.markdown.extensions.ins.InsProvider
 import universe.ui.markdown.extensions.strikethrough.StrikethroughExtension
 import universe.ui.markdown.extensions.strikethrough.StrikethroughProvider
 import universe.ui.markdown.extensions.table.TableProvider
 import universe.ui.markdown.extensions.table.TablesExtension
+import universe.ui.markdown.url.*
 import javax.swing.table.TableColumn
+import kotlin.concurrent.thread
+
+private var clickListenerField = Button::class.java.getDeclaredField("clickListener")
+  .also { it.isAccessible = true }
 
 class BaseProvider: MarkdownProvider, CurtainProvider, InsProvider, StrikethroughProvider, TableProvider {
   override fun extensions() = listOf(
+    ImgAttrExtension.create(),
     TablesExtension.create(),
     InsExtension.create(),
     StrikethroughExtension.create(),
     CurtainExtension.create()
   )
 
+  override fun urlHandlers() = listOf(
+    HttpHandler(),
+    AtlasHandler(),
+    LocalFileHandler(),
+    ResourceHandler(),
+    DataHandler(),
+  )
+
   override fun RendererContext.add(node: Document) {
     //always create a root scope, set the max width.
     withScope(
-      maxWidth = if (mdWidth <= 0) -1f else mdWidth
+      boundX = if (mdWidth <= 0) -1f else mdWidth
     ) {
+      mdStyle.textFont.applyFont()
       renderChildren(node)
     }
   }
 
   override fun RendererContext.add(node: Heading) {
-    TODO("Not yet implemented")
+    withScope {
+      mdStyle.headFonts
+        .ifEmpty { throw IllegalArgumentException("Markdown style must provide least one HeadFonts") }
+        .let { list -> list[Mathf.clamp(node.level - 1, 0, list.size - 1)] }
+        .applyFont()
+
+      renderChildren(node)
+    }
+    row(Scl.scl(mdStyle.paragraphPadding))
   }
 
   override fun RendererContext.add(node: Paragraph) {
     renderChildren(node)
-    row(mdStyle.paragraphPadding)
+    row(Scl.scl(mdStyle.paragraphPadding))
   }
 
   override fun RendererContext.add(node: BlockQuote) {
-    TODO("Not yet implemented")
-  }
+    withScope(
+      box = mdStyle.quoteBox,
+      fillX = true
+    ) {
+      renderChildren(node)
+    }
 
-  override fun RendererContext.add(node: BulletList) {
-    TODO("Not yet implemented")
-  }
-
-  override fun RendererContext.add(node: FencedCodeBlock) {
-    TODO("Not yet implemented")
-  }
-
-  override fun RendererContext.add(node: HtmlBlock) {
-    TODO("Not yet implemented")
-  }
-
-  override fun RendererContext.add(node: ThematicBreak) {
-    TODO("Not yet implemented")
-  }
-
-  override fun RendererContext.add(node: IndentedCodeBlock) {
-    TODO("Not yet implemented")
+    row(Scl.scl(mdStyle.paragraphPadding))
   }
 
   override fun RendererContext.add(node: Link) {
-    TODO("Not yet implemented")
-  }
+    val text = (node.firstChild as? Text)?.literal?:""
+    withScope(
+      copyBreak = true
+    ) {
+      mdStyle.linkFont.applyFont()
+      val clickListener = ClickListener()
 
-  override fun RendererContext.add(node: ListItem) {
-    TODO("Not yet implemented")
-  }
-
-  override fun RendererContext.add(node: OrderedList) {
-    TODO("Not yet implemented")
-  }
-
-  override fun RendererContext.add(node: Image) {
-    TODO("Not yet implemented")
-  }
-
-  override fun RendererContext.add(node: Emphasis) {
-    TODO("Not yet implemented")
-  }
-
-  override fun RendererContext.add(node: StrongEmphasis) {
-    TODO("Not yet implemented")
+      drawTextWrap(
+        str = text,
+        font = font,
+        color = fontColor,
+        scl = fontScale
+      ){ s ->
+        val draw = DrawUrl.get(
+          s.toString(), node.destination,
+          font, fontColor, fontScale,
+          mdStyle.linkOverColor
+        )
+        draw(draw)
+        val elem = draw.button
+        elem.removeListener(elem.clickListener)
+        elem.addListener(clickListener)
+        clickListenerField.set(elem, clickListener)
+      }
+    }
   }
 
   override fun RendererContext.add(node: Text) {
-    addTextWrap(
+    drawTextWrap(
       str = node.literal,
       font = getScope().font,
-      color = Color.white,
-      scl = 1f,
+      color = getScope().fontColor,
+      scl = getScope().fontScale,
     )
   }
 
   override fun RendererContext.add(node: Code) {
-    TODO("Not yet implemented")
+    withScope(
+      box = mdStyle.codeBox,
+      copyBreak = true,
+    ){
+      mdStyle.codeFont.applyFont()
+
+      drawTextWrap(
+        str = node.literal,
+        font = font,
+        color = fontColor,
+        scl = fontScale,
+      )
+    }
   }
 
-  override fun RendererContext.add(node: HtmlInline) {
-    TODO("Not yet implemented")
+  override fun RendererContext.add(node: BulletList) {
+    withScope{
+      var layer = 0
+      eachAncestral { if (it.hasTag("list")) layer++ }
+
+      tags("list")
+
+      node.eachChildren { n ->
+        val head = mdStyle.bulletListMarks.let { l -> l[Mathf.clamp(layer, 0, l.size - 1)] }
+
+        withScope(
+          box = mdStyle.listItemHeadBox
+        ) {
+          draw(DrawImg.get(head))
+        }
+
+        render(n)
+      }
+    }
+
+    row(Scl.scl(mdStyle.paragraphPadding))
+  }
+
+  override fun RendererContext.add(node: OrderedList) {
+    withScope{
+      var layer = 0
+      eachAncestral { if (it.hasTag("list")) layer++ }
+
+      tags("list")
+
+      var n = node.markerStartNumber
+      node.eachChildren { child ->
+        withScope(
+          box = mdStyle.listItemHeadBox
+        ) {
+          mdStyle.listOrderFont.applyFont()
+          val format = mdStyle.orderedListFormatters.let { list ->
+            list[Mathf.clamp(layer, 0, list.size - 1)]
+          }
+
+          draw(DrawStr.get(
+            "${format(n)}.",
+            font,
+            fontColor,
+            fontScale
+          ))
+        }
+
+        render(child)
+        n++
+      }
+    }
+
+    row(Scl.scl(mdStyle.paragraphPadding))
+  }
+
+  override fun RendererContext.add(node: ListItem) {
+    withScope {
+      renderChildren(node)
+    }
+
+    row(Scl.scl(mdStyle.paragraphPadding))
+  }
+
+  override fun RendererContext.add(node: IndentedCodeBlock) {
+    withScope(
+      box = mdStyle.codeBlockBox,
+    ) {
+      mdStyle.codeFont.applyFont()
+
+      draw(DrawCodeBlock.get(
+        font,
+        fontScale,
+        node.literal.substring(0, node.literal.length - 1),
+        "",
+        mdStyle.codeBlockSliderStyle,
+      ))
+    }
+  }
+
+  override fun RendererContext.add(node: FencedCodeBlock) {
+    withScope(
+      box = mdStyle.codeBlockBox,
+    ) {
+      mdStyle.codeFont.applyFont()
+
+      draw(DrawCodeBlock.get(
+        font,
+        fontScale,
+        node.literal.substring(0, node.literal.length - 1),
+        node.info,
+        mdStyle.codeBlockSliderStyle
+      ))
+    }
+  }
+
+  override fun RendererContext.add(node: ThematicBreak) {
+    draw(DrawThematicBreak.get(
+      mdStyle.lineColor,
+      Scl.scl(mdStyle.lineStroke)
+    ))
+    row(Scl.scl(mdStyle.paragraphPadding))
+  }
+
+  override fun RendererContext.add(node: Image) {
+    val attributes = node.findChild { it is ImageAttributes } as? ImageAttributes
+
+    val url = node.destination
+    val drawable = resolveResource(url) { input ->
+      val res = TextureRegionDrawable((Tex.nomap as TextureRegionDrawable).region)
+      thread {
+        try {
+          val bytes = input.open().readBytes()
+
+          Core.app.post {
+            val pixmap = Pixmap(bytes)
+            val texture = Texture(pixmap)
+            res.set(TextureRegion(texture))
+            mdInvalidate()
+          }
+        } catch (e: Exception) {
+          Core.app.post { invalidResource(url) }
+          Log.err(e)
+        } finally {
+          input.close()
+        }
+      }
+
+      res
+    }
+
+    attributes?.let {
+      val width = it.attributes["width"]?.toFloat()?:0f
+      val height = it.attributes["height"]?.toFloat()?:0f
+      val scaling = Scaling.entries.find { s -> s.name == it.attributes["scaling"] }?: Scaling.stretch
+
+      draw(DrawImg.get(
+        drawable,
+        scaling = scaling,
+        widthModifier = width,
+        heightModifier = height,
+      ))
+    }?: draw(DrawImg.get(drawable))
+    row(Scl.scl(mdStyle.paragraphPadding))
+  }
+
+  override fun RendererContext.add(node: Emphasis) {
+    withScope {
+      mdStyle.emFont.applyFont()
+
+      renderChildren(node)
+    }
+  }
+
+  override fun RendererContext.add(node: StrongEmphasis) {
+    withScope {
+      mdStyle.strongFont.applyFont()
+
+      renderChildren(node)
+    }
   }
 
   override fun RendererContext.add(node: SoftLineBreak) {
-    TODO("Not yet implemented")
+    drawTextWrap(
+      str = " ",
+      font = getScope().font,
+      color = getScope().fontColor,
+      scl = getScope().fontScale,
+    )
   }
 
   override fun RendererContext.add(node: HardLineBreak) {
-    TODO("Not yet implemented")
+    row(Scl.scl(mdStyle.linesPadding))
   }
 
   override fun RendererContext.add(node: LinkReferenceDefinition) {
-    TODO("Not yet implemented")
+    putVar("link-def-${node.label}", node.destination)
   }
 
   override fun RendererContext.add(node: Curtain) {
-    TODO("Not yet implemented")
+
   }
 
   override fun RendererContext.add(node: Ins) {
@@ -155,4 +356,6 @@ class BaseProvider: MarkdownProvider, CurtainProvider, InsProvider, Strikethroug
   override fun RendererContext.add(node: TableColumn) {
     TODO("Not yet implemented")
   }
+
+
 }

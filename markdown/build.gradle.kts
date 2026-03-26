@@ -7,6 +7,7 @@ plugins {
 
 val mindustryVersion = "v154"
 val arcVersion = "v154"
+val commonmarkVersion = "0.27.1"
 
 publishing {
   publications {
@@ -24,9 +25,9 @@ repositories {
   mavenLocal()
   mavenCentral()
 
-  maven ("https://maven.xpdustry.com/mindustry")
-  maven { url = uri("https://raw.githubusercontent.com/Zelaux/MindustryRepo/master/repository") }
-  maven { url = uri("https://www.jitpack.io") }
+  maven("https://maven.xpdustry.com/mindustry")
+  maven("https://raw.githubusercontent.com/Zelaux/MindustryRepo/master/repository")
+  maven("https://www.jitpack.io")
 }
 
 dependencies {
@@ -36,10 +37,11 @@ dependencies {
   testImplementation("com.github.Anuken.Arc:arc-core:$arcVersion")
   testImplementation("com.github.Anuken.Mindustry:core:$mindustryVersion")
 
-  implementation("org.commonmark:commonmark:0.20.0")
-  implementation("org.commonmark:commonmark-ext-gfm-tables:0.20.0")
-  implementation("org.commonmark:commonmark-ext-gfm-strikethrough:0.20.0")
-  implementation("org.commonmark:commonmark-ext-ins:0.20.0")
+  implementation("org.commonmark:commonmark:$commonmarkVersion")
+  implementation("org.commonmark:commonmark-ext-gfm-tables:$commonmarkVersion")
+  implementation("org.commonmark:commonmark-ext-gfm-strikethrough:$commonmarkVersion")
+  implementation("org.commonmark:commonmark-ext-ins:$commonmarkVersion")
+  implementation("org.commonmark:commonmark-ext-image-attributes:$commonmarkVersion")
 
   implementation(kotlin("stdlib-jdk8"))
   implementation(kotlin("reflect"))

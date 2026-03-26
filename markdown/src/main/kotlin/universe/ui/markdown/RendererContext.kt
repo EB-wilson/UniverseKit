@@ -1,171 +1,364 @@
 package universe.ui.markdown
 
+import arc.func.Boolf
+import arc.func.Cons
+import arc.func.Func
+import arc.func.Func2
+import arc.func.Prov
 import arc.graphics.Color
 import arc.graphics.g2d.Font
 import arc.scene.style.Drawable
 import arc.scene.ui.layout.Scl
+import arc.struct.ObjectMap
 import arc.struct.Seq
-import jdk.javadoc.internal.doclets.toolkit.util.DocPath.parent
 import mindustry.ui.Fonts
 import org.commonmark.node.Node
-import universe.ui.markdown.Markdown.DrawObj
+import universe.ui.markdown.Markdown.MarkdownDraw
+import universe.ui.markdown.elemdraw.DrawImg
+import java.io.InputStream
 import kotlin.math.max
 
 abstract class RendererContext protected constructor(
   private val element: Markdown<*>
 ) {
-  private val drawObjs = Seq<DrawObj>()
+  companion object {
+    private val SCHEME_TYPE_PATTERN = "\\w+:".toRegex()
+  }
+
+  private val markdownDraws = Seq<MarkdownDraw>()
+  private val attachedVars = ObjectMap<String, Any>()
+
   private var currentScope: Scope? = null
   private var rootScope: Scope? = null
 
-  val prefWidth: Float get() = rootScope?.let { it.width + it.paddingX*2}?:0f
-  val prefHeight: Float = rootScope?.let { it.height + it.paddingY*2}?:0f
+  private val resourceCache = mutableMapOf<String, Any>()
+  private val urlHandlers: Map<String, UrlHandler> = element.provider.urlHandlers()
+    .flatMap { h -> h.matchedSchemes().map { it to h } }
+    .toMap()
 
-  val mdStyle = element.getStyle()
-  val mdWidth = element.width
-  val mdHeight = element.height
+  val prefWidth: Float get() = rootScope?.let { it.width + it.paddingLeft + it.paddingRight}?:0f
+  val prefHeight: Float get() = rootScope?.let { it.height + it.paddingTop + it.paddingBottom}?:0f
+
+  val mdStyle get() = element.getStyle()
+  val mdWidth get() = element.width
+  val mdHeight get() = element.height
+
+  fun mdInvalidate() {
+    element.invalidate()
+  }
 
   abstract fun render(node: Node)
 
   class Scope internal constructor(
-    val background: Drawable? = null,
+    val drawProvider: Prov<MarkdownDraw>? = null,
     val parent: Scope? = null,
-    val paddingX: Float,
-    val paddingY: Float,
-    val marginX: Float,
-    val marginY: Float,
-    val maxWidth: Float
-  ): DrawObj(){
-    init {
-      this.offsetX = (parent?.offsetX?:0f) + paddingX
-      this.offsetY = (parent?.currOffsetY?:0f) + paddingY
-    }
+    val paddingLeft: Float,
+    val paddingRight: Float,
+    val paddingTop: Float,
+    val paddingBottom: Float,
+    val marginLeft: Float,
+    val marginRight: Float,
+    val marginTop: Float,
+    val marginBottom: Float,
+    val boundX: Float,
+    fillX: Boolean,
+    val copyBreak: Boolean
+  ){
+    internal var tags = mutableSetOf<String>()
 
-    var currOffsetX: Float = (parent?.currOffsetX?:offsetX) + marginX
-    var currOffsetY: Float = offsetY + marginY
+    val scopeDraw = drawProvider?.get()
+
+    var offsetX: Float = (parent?.currOffsetX?:0f) + paddingLeft
+    var offsetY: Float = (parent?.currOffsetY?:0f) + paddingTop
+
+    var width: Float = if (fillX) boundX - offsetX else 0f
+    var height: Float = 0f
+
+    var currOffsetX: Float = offsetX + marginLeft
+    var currOffsetY: Float = offsetY + marginTop
 
     var rowHeight: Float = 0f
 
-    var font: Font = Fonts.def
-    var fontColor: Color = Color.white
-    var fontScale: Float = 1f
+    var font: Font = parent?.font?: Fonts.def
+    var fontColor: Color = parent?.fontColor?: Color.white
+    var fontScale: Float = parent?.fontScale?: 1f
 
-    override fun prefWidth(): Float = 0f
-    override fun prefHeight(): Float = 0f
+    fun tags(vararg tags: String) {
+      this.tags.addAll(tags)
+    }
 
-    override fun setup() {}
+    fun hasTag(tag: String): Boolean = this.tags.contains(tag)
 
-    override fun draw(x: Float, y: Float) {
-      background?.draw(x, y, width, height)
+    fun getTags(): List<String> = this.tags.toList()
+
+    fun eachAncestral(callback: Cons<Scope>) {
+      callback.get(this)
+      parent?.eachAncestral(callback)
+    }
+
+    fun findAncestral(callback: Boolf<Scope>): Scope? {
+      if (callback.get(this)) return this
+      return parent?.findAncestral(callback)
+    }
+
+    fun Markdown.FontEntry.applyFont(){
+      this@Scope.font = fontModifier?: parent?.font?: Fonts.def
+      this@Scope.fontColor = colorModifier?: parent?.fontColor?: Color.white
+      this@Scope.fontScale = scaleModifier?: parent?.fontScale?: 1f
     }
   }
 
   fun init() {
     rootScope = null
     currentScope = null
-    drawObjs.clear()
+    markdownDraws.clear()
+    attachedVars.clear()
+  }
+
+  private fun resolveUrlHandler(url: String): UrlHandler {
+    val schemeMatch = SCHEME_TYPE_PATTERN.matchAt(url, 0)
+    val scheme = schemeMatch?.value?.trimEnd(':')?:"https"
+
+    return urlHandlers[scheme]?: throw IllegalArgumentException("Unknown scheme type: $scheme")
+  }
+
+  fun openUrl(url: String) {
+    resolveUrlHandler(url).openUrl(url)
+  }
+
+  private fun getUrlResource(url: String): UrlHandler.ResourceHandle {
+    return resolveUrlHandler(url).getResource(url)
+  }
+
+  @Suppress("UNCHECKED_CAST")
+  fun <T: Any> resolveResource(
+    url: String,
+    resourceResolver: Func<UrlHandler.ResourceHandle, T>,
+  ): T {
+    return resourceCache.computeIfAbsent(url) {
+      val handle = getUrlResource(url)
+      resourceResolver.get(handle)
+    } as T
+  }
+
+  fun invalidResource(url: String) {
+    resourceCache.remove(url)
+  }
+
+  fun putVar(name: String, value: Any) {
+    attachedVars.put(name, value)
+  }
+
+  @Suppress("UNCHECKED_CAST")
+  fun <T> getVar(name: String): T? {
+    return attachedVars.get(name) as? T
+  }
+
+  @Suppress("UNCHECKED_CAST")
+  fun <T> getVar(name: String, def: T): T {
+    val res = attachedVars.get(name)
+    if (res == null) {
+      attachedVars.put(name, def)
+      return def
+    }
+    return res as T
+  }
+
+  @Suppress("UNCHECKED_CAST")
+  fun <T> getVar(name: String, def: Prov<T>): T {
+    return attachedVars.get(name){ def.get() } as T
   }
 
   fun getScope(): Scope = currentScope?: insertScope()
 
   fun withScope(
-    background: Drawable? = null,
-    paddingX: Float = 0f,
-    paddingY: Float = 0f,
-    marginX: Float = 0f,
-    marginY: Float = 0f,
-    maxWidth: Float = (currentScope?.maxWidth?:0f) - paddingX*2,
+    box: Markdown.Box,
+    boundX: Float = (currentScope?.boundX ?: 0f) - box.paddingRight,
+    fillX: Boolean = false,
+    copyBreak: Boolean = false,
+    callback: Scope.() -> Unit,
+  ) = withScope(
+    drawProvider = box.background?.let{ { DrawImg.get(box.background) } },
+    paddingLeft = Scl.scl(box.paddingLeft),
+    paddingRight = Scl.scl(box.paddingRight),
+    paddingTop = Scl.scl(box.paddingTop),
+    paddingBottom = Scl.scl(box.paddingBottom),
+    marginLeft = Scl.scl(box.marginLeft),
+    marginRight = Scl.scl(box.marginRight),
+    marginTop = Scl.scl(box.marginTop),
+    marginBottom = Scl.scl(box.marginBottom),
+    boundX = boundX,
+    fillX = fillX,
+    copyBreak = copyBreak,
+    callback = callback,
+  )
+
+  fun insertScope(
+    box: Markdown.Box,
+    boundX: Float = (currentScope?.boundX ?: 0f) - box.paddingRight,
+    fillX: Boolean = false,
+    copyBreak: Boolean = false,
+  ) = insertScope(
+    drawProvider = box.background?.let{ { DrawImg.get(box.background) } },
+    paddingLeft = Scl.scl(box.paddingLeft),
+    paddingRight = Scl.scl(box.paddingRight),
+    paddingTop = Scl.scl(box.paddingTop),
+    paddingBottom = Scl.scl(box.paddingBottom),
+    marginLeft = Scl.scl(box.marginLeft),
+    marginRight = Scl.scl(box.marginRight),
+    marginTop = Scl.scl(box.marginTop),
+    marginBottom = Scl.scl(box.marginBottom),
+    boundX = boundX,
+    fillX = fillX,
+    copyBreak = copyBreak,
+  )
+
+  fun withScope(
+    drawProvider: Prov<MarkdownDraw>? = null,
+    paddingLeft: Float = 0f,
+    paddingRight: Float = 0f,
+    paddingTop: Float = 0f,
+    paddingBottom: Float = 0f,
+    marginLeft: Float = 0f,
+    marginRight: Float = 0f,
+    marginTop: Float = 0f,
+    marginBottom: Float = 0f,
+    boundX: Float = (currentScope?.boundX ?: 0f) - paddingRight,
+    fillX: Boolean = false,
+    copyBreak: Boolean = false,
     callback: Scope.() -> Unit
   ) {
     insertScope(
-      background,
-      paddingX,
-      paddingY,
-      marginX,
-      marginY,
-      maxWidth,
+      drawProvider,
+      paddingLeft, paddingRight, paddingTop, paddingBottom,
+      marginLeft, marginRight, marginTop, marginBottom,
+      boundX,
+      fillX,
+      copyBreak,
     ).callback()
     popScope()
   }
 
   fun insertScope(
-    background: Drawable? = null,
-    paddingX: Float = 0f,
-    paddingY: Float = 0f,
-    marginX: Float = 0f,
-    marginY: Float = 0f,
-    maxWidth: Float = (currentScope?.maxWidth?:0f) - paddingX*2,
+    drawProvider: Prov<MarkdownDraw>? = null,
+    paddingLeft: Float = 0f,
+    paddingRight: Float = 0f,
+    paddingTop: Float = 0f,
+    paddingBottom: Float = 0f,
+    marginLeft: Float = 0f,
+    marginRight: Float = 0f,
+    marginTop: Float = 0f,
+    marginBottom: Float = 0f,
+    boundX: Float = (currentScope?.boundX ?: 0f) - paddingRight,
+    fillX: Boolean = false,
+    copyBreak: Boolean = false,
   ): Scope {
     val scope = Scope(
-      background,
+      drawProvider,
       currentScope,
-      paddingX,
-      paddingY,
-      marginX,
-      marginY,
-      maxWidth,
+      paddingLeft, paddingRight, paddingTop, paddingBottom,
+      marginLeft, marginRight, marginTop, marginBottom,
+      boundX,
+      fillX,
+      copyBreak,
     )
 
     if (currentScope == null) {
       rootScope = scope
     }
 
-    drawObjs.add(scope)
+    if (scope.scopeDraw != null) markdownDraws.add(scope.scopeDraw)
+
     currentScope = scope
 
     return scope
   }
 
-  fun popScope(){
+  fun popScope(): Scope{
     val curr = currentScope?:
       throw IllegalStateException("Current has no scope be set.")
     val last = curr.parent
 
     if (last != null) {
-      last.height = max(last.height, curr.offsetY + curr.height - last.offsetY + last.paddingY)
-      last.currOffsetX += curr.width + curr.paddingX
+      last.height = max(last.height, curr.offsetY + curr.height - last.offsetY + last.paddingBottom)
+      last.rowHeight = max(last.rowHeight, curr.height + curr.paddingTop + curr.paddingBottom)
+      last.currOffsetX += curr.width + curr.paddingLeft + curr.paddingRight
     }
 
     currentScope = last
-  }
 
-  fun draw(drawObj: DrawObj) {
-    val curr = getScope()
-    drawObj.setup()
-
-    drawObj.width = drawObj.prefWidth()
-    drawObj.height = drawObj.prefHeight()
-
-    if (curr.maxWidth > 0 && curr.currOffsetX + drawObj.width > curr.maxWidth && curr.maxWidth > drawObj.width) {
-      row(mdStyle.linesPadding)
+    curr.scopeDraw?.also { draw ->
+      draw.offsetX = curr.offsetX
+      draw.offsetY = curr.offsetY
+      draw.width = curr.width
+      draw.height = curr.height
     }
 
-    drawObj.offsetX = curr.currOffsetX
-    drawObj.offsetY = curr.currOffsetY
-
-    if (curr.maxWidth > 0 && drawObj.offsetX + drawObj.width > curr.maxWidth) {
-      val srkW = curr.maxWidth - drawObj.offsetX
-      val ratio = srkW/drawObj.width
-
-      drawObj.width = srkW
-      drawObj.height *= ratio
-    }
-
-    drawObjs.add(drawObj)
-
-    curr.currOffsetX += drawObj.width
-    curr.width = max(curr.width, drawObj.offsetX + drawObj.width - curr.offsetX + curr.marginX)
-    curr.height = max(curr.height, drawObj.offsetY + drawObj.height - curr.offsetY + curr.marginY)
-    curr.rowHeight = max(curr.rowHeight, drawObj.height)
+    return curr
   }
 
-  fun row(rowPadding: Float) {
+  fun draw(markdownDraw: MarkdownDraw) {
     val curr = getScope()
 
-    curr.currOffsetX = curr.offsetX + curr.marginX
-    curr.currOffsetY += curr.rowHeight + Scl.scl(rowPadding)
+    markdownDraw.offsetX = curr.currOffsetX
+    markdownDraw.offsetY = curr.currOffsetY
+
+    markdownDraw.setup(curr)
+    markdownDraw.width = markdownDraw.prefWidth()
+    markdownDraw.height = markdownDraw.prefHeight()
+
+    val boundX = curr.boundX - curr.marginRight
+
+    if (curr.boundX > 0 && markdownDraw.offsetX + markdownDraw.width > boundX) {
+      val srkW = boundX - markdownDraw.offsetX
+      val ratio = srkW/markdownDraw.width
+
+      markdownDraw.width = srkW
+      markdownDraw.height *= ratio
+    }
+
+    markdownDraws.add(markdownDraw)
+
+    curr.currOffsetX += markdownDraw.width
+    curr.width = max(curr.width, markdownDraw.offsetX + markdownDraw.width - curr.offsetX + curr.marginRight)
+    curr.height = max(curr.height, markdownDraw.offsetY + markdownDraw.height - curr.offsetY + curr.marginBottom)
+    curr.rowHeight = max(curr.rowHeight, markdownDraw.height)
+  }
+
+  fun pad(padding: Float){
+    getScope().currOffsetX += padding
+  }
+
+  fun row(rowPadding: Float): Scope {
+    val last = getScope()
+    if (last.copyBreak) {
+      if (last.drawProvider != null && last.width <= last.marginLeft + last.marginRight) {
+        markdownDraws.remove(last.scopeDraw)
+      }
+      popScope()
+    }
+
+    val curr = getScope()
+    curr.currOffsetX = curr.offsetX + curr.marginLeft
+    curr.currOffsetY += curr.rowHeight + rowPadding
     curr.rowHeight = 0f
+
+    if (last.copyBreak) {
+      return insertScope(
+        last.drawProvider,
+        last.paddingLeft, last.paddingRight, last.paddingTop, last.paddingBottom,
+        last.marginLeft, last.marginRight, last.marginTop, last.marginBottom,
+        last.boundX,
+      ).apply {
+        font = last.font
+        fontColor = last.fontColor
+        fontScale = last.fontScale
+        tags = last.tags
+      }
+    }
+
+    return curr
   }
 
-  fun renderResult() = drawObjs.toList()
+  fun renderResult() = markdownDraws.toList()
 }

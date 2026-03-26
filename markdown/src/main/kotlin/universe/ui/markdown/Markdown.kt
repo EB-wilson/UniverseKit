@@ -6,8 +6,9 @@ import arc.graphics.g2d.Font
 import arc.scene.Element
 import arc.scene.event.Touchable
 import arc.scene.style.Drawable
-import arc.scene.ui.ScrollPane.ScrollPaneStyle
+import arc.scene.ui.ScrollPane
 import arc.scene.ui.layout.WidgetGroup
+import arc.struct.ObjectMap
 import arc.struct.Seq
 import arc.util.pooling.Pool.Poolable
 import arc.util.pooling.Pools
@@ -17,7 +18,6 @@ import org.commonmark.node.Node
 import org.commonmark.parser.Parser
 import org.commonmark.parser.Parser.ParserExtension
 import universe.ui.markdown.MDLayoutRenderer.DrawRendererExtension
-import javax.swing.text.Highlighter
 
 fun Markdown(
   md: String,
@@ -26,36 +26,20 @@ fun Markdown(
 
 /**Markdown文档渲染元素。*/
 open class Markdown<P: MarkdownProvider> : WidgetGroup {
-  companion object{
-    val IMAGE_BASE_64_List: Array<String?> = arrayOf<String?>(
-      "data:image/png;base64,",
-      "data:image/jpg;base64,",
-      "data:image/jpeg;base64,"
-    )
-
-    private fun checkExtensions(extensions: List<Extension>) {
-      for (extension in extensions) {
-        require(!(extension !is DrawRendererExtension || extension !is ParserExtension)) { "extension must be a DrawRendererExtension or a ParserExtension" }
-      }
-    }
-  }
-
-  private val drawObjs = Seq<DrawObj>()
+  private val markdownDraws = Seq<MarkdownDraw>()
 
   private var node: Node
   private var style: MarkdownStyle?
-
-  private var prefWidth: Float = 0f
-  private var prefHeight: Float = 0f
 
   private var prefInvalid: Boolean = true
   private var buildActObjs: Boolean = false
   private var lastPrefHeight: Float = 0f
 
-  internal var provider: P
   internal val parser: Parser?
   internal val renderer: MDLayoutRenderer
-  internal val rendererContext: RendererContext
+
+  internal var provider: P
+  internal var rendererContext: RendererContext
 
   internal constructor(provider: P, md: String, style: MarkdownStyle) {
     val extensions = provider.extensions()
@@ -93,8 +77,17 @@ open class Markdown<P: MarkdownProvider> : WidgetGroup {
     this.style = parent.getStyle()
   }
 
+  private fun checkExtensions(extensions: List<Extension>) {
+    for (extension in extensions) {
+      require(extension is DrawRendererExtension || extension is ParserExtension) {
+        "extension must be a DrawRendererExtension or a ParserExtension"
+      }
+    }
+  }
+
   fun setProvider(provider: P) {
     this.provider = provider
+    this.rendererContext = renderer.createContext(this)
     invalidate()
   }
 
@@ -114,39 +107,37 @@ open class Markdown<P: MarkdownProvider> : WidgetGroup {
     return style!!
   }
 
-  private fun calculatePrefSize() {
-    prefWidth = 0f
-    prefHeight = 0f
-
+  private fun renderLayout(): Boolean {
     renderer.renderLayout(node)
-
-    prefWidth = rendererContext.prefWidth
-    prefHeight += rendererContext.prefHeight
 
     prefInvalid = false
 
-    if (prefHeight != lastPrefHeight) {
-      lastPrefHeight = prefHeight
+    if (rendererContext.prefHeight != lastPrefHeight) {
+      lastPrefHeight = rendererContext.prefHeight
       invalidateHierarchy()
+
+      return false
     }
+
+    return true
   }
 
   override fun layout() {
-    for (obj in drawObjs) {
+    for (obj in markdownDraws) {
       obj.free()
     }
-    drawObjs.clear()
+    markdownDraws.clear()
 
-    renderer.renderLayout(node)
+    if (!renderLayout()) return
 
-    drawObjs.addAll(rendererContext.renderResult())
-    drawObjs.sort{ a, b -> a.priority() - b.priority() }
+    markdownDraws.addAll(rendererContext.renderResult())
+    markdownDraws.sort{ a, b -> a.priority() - b.priority() }
 
     buildActObjs = true
     clearChildren()
-    for (obj in drawObjs) {
+    for (obj in markdownDraws) {
       if (obj is ActivityDrawer) {
-        val element = obj.elem
+        val element = obj.getActiveElement()
         addChild(element)
         element.setBounds(
           obj.offsetX,
@@ -170,17 +161,16 @@ open class Markdown<P: MarkdownProvider> : WidgetGroup {
   }
 
   override fun getPrefWidth(): Float {
-    if (prefInvalid) calculatePrefSize()
-    return prefWidth
+    return 0f
   }
 
   override fun getPrefHeight(): Float {
-    if (prefInvalid) calculatePrefSize()
-    return prefHeight
+    if (prefInvalid) renderLayout()
+    return rendererContext.prefHeight
   }
 
   override fun drawChildren() {
-    for (obj in drawObjs) {
+    for (obj in markdownDraws) {
       if (obj is ActivityDrawer && cullingArea != null && !cullingArea.overlaps(
         obj.offsetX,
         height + obj.offsetY,
@@ -195,37 +185,87 @@ open class Markdown<P: MarkdownProvider> : WidgetGroup {
     super.drawChildren()
   }
 
-  open class MarkdownStyle {
+  data class FontEntry(
+    val fontModifier: Font? = null,
+    val colorModifier: Color? = null,
+    val scaleModifier: Float? = null,
+  )
+
+  data class Box(
+    val background: Drawable? = null,
+    val paddingLeft: Float = 0f,
+    val paddingRight: Float = 0f,
+    val paddingTop: Float = 0f,
+    val paddingBottom: Float = 0f,
+    val marginLeft: Float = 0f,
+    val marginRight: Float = 0f,
+    val marginTop: Float = 0f,
+    val marginBottom: Float = 0f,
+  ){
+    constructor(
+      background: Drawable? = null,
+      paddingX: Float = 0f,
+      paddingY: Float = 0f,
+      marginX: Float = 0f,
+      marginY: Float = 0f,
+    ): this(
+      background = background,
+      paddingLeft = paddingX,
+      paddingRight = paddingX,
+      paddingTop = paddingY,
+      paddingBottom = paddingY,
+      marginLeft = marginX,
+      marginRight = marginX,
+      marginTop = marginY,
+      marginBottom = marginY,
+    )
+  }
+
+  class MarkdownStyle {
+    private companion object{
+      val defaultFont = FontEntry(Fonts.def, Color.white, 1f)
+      val defaultBox = Box()
+    }
+
+    //globals
     var linesPadding: Float = 0f
     var paragraphPadding: Float = 0f
 
-    var tablePadHor: Float = 0f
-    var tablePadVert: Float = 0f
+    var lineColor: Color = Color.white
+    var lineStroke: Float = 0f
 
-    lateinit var font: Font
-    lateinit var subFont: Font
-    lateinit var codeFont: Font
-    lateinit var emFont: Font
-    lateinit var strongFont: Font
-    lateinit var textColor: Color
-    lateinit var emColor: Color
-    lateinit var subTextColor: Color
-    lateinit var lineColor: Color
-    lateinit var linkColor: Color
+    //normal
+    var textFont: FontEntry = defaultFont
+    var subFont: FontEntry = defaultFont
+    var emFont: FontEntry = defaultFont
+    var strongFont: FontEntry = defaultFont
+    var headFonts: Array<FontEntry> = arrayOf()
+    var quoteBox: Box = defaultBox
+    var curtain: Box = defaultBox
 
-    lateinit var codeBlockStyle: ScrollPaneStyle
-    lateinit var listMarks: Array<Drawable>
+    //code
+    var codeFont: FontEntry = defaultFont
+    var codeBox: Box = defaultBox
+    var codeBlockBox: Box = defaultBox
+    var codeBlockSliderStyle: ScrollPane.ScrollPaneStyle = ScrollPane.ScrollPaneStyle()
 
-    lateinit var board: Drawable
-    lateinit var codeBack: Drawable
-    lateinit var codeBlockBack: Drawable
-    lateinit var tableBack1: Drawable
-    lateinit var tableBack2: Drawable
-    lateinit var curtain: Drawable
-    lateinit var highlighter: Highlighter
+    //link
+    var linkFont: FontEntry = defaultFont
+    var linkOverColor: Color = Color.white
+
+    //list
+    var listOrderFont: FontEntry = defaultFont
+    var listItemBox: Box = defaultBox
+    var listItemHeadBox: Box = defaultBox
+    var bulletListMarks: Array<Drawable> = arrayOf()
+    var orderedListFormatters: Array<(Int) -> String> = arrayOf()
+
+    //table
+    var tableBack1: Box = defaultBox
+    var tableBack2: Box = defaultBox
   }
 
-  abstract class DrawObj : Poolable {
+  abstract class MarkdownDraw : Poolable {
     var offsetX: Float = 0f
     var offsetY: Float = 0f
 
@@ -235,7 +275,7 @@ open class Markdown<P: MarkdownProvider> : WidgetGroup {
     abstract fun prefWidth(): Float
     abstract fun prefHeight(): Float
 
-    abstract fun setup()
+    abstract fun setup(scope: RendererContext.Scope)
     abstract fun draw(x: Float, y: Float)
 
     open fun priority(): Int {
@@ -244,7 +284,7 @@ open class Markdown<P: MarkdownProvider> : WidgetGroup {
 
     override fun reset() {
       offsetY = 0f
-      offsetX = offsetY
+      offsetX = 0f
     }
 
     fun free() {
@@ -258,6 +298,6 @@ open class Markdown<P: MarkdownProvider> : WidgetGroup {
   }
 
   interface ActivityDrawer {
-    val elem: Element
+    fun getActiveElement(): Element
   }
 }
