@@ -43,7 +43,7 @@ abstract class EnumAccessorBase<E: Enum<E>>(
 
   @Suppress("UNCHECKED_CAST")
   internal fun insertEnumItem(e: E){
-    val list = (valuesAccessor.get(e) as Array<E>).toMutableList()
+    val list = (valuesAccessor.getStatic() as Array<E>).toMutableList()
     list.add(e.ordinal, e)
     list.forEachIndexed { index, value -> value.ordinalModify = index }
 

@@ -63,7 +63,8 @@ object Demodulator {
   }
 
   fun makeModuleOpen(from: Module, clazz: Class<*>, to: Module) {
-    if (clazz.isArray) makeModuleOpen(from, clazz.componentType, to)
+    if (clazz.isPrimitive) return
+    else if (clazz.isArray) makeModuleOpen(from, clazz.componentType, to)
     else makeModuleOpen(from, clazz.getPackage(), to)
   }
 

@@ -1,15 +1,14 @@
-import universe.util.reflect.Reflection.accessField
-import kotlin.enums.EnumEntries
-import kotlin.enums.enumEntries
-import kotlin.reflect.KFunction
-import kotlin.reflect.jvm.javaMethod
+import universe.util.reflect.Enums.accessEnum0
 
-enum class Te{
+enum class Test{
   A, B, C
 }
 
-fun main(){
-  val n: KFunction<EnumEntries<Te>> = ::enumEntries
 
-  n.javaMethod!!.declaringClass.declaredMethods.forEach { println(it) }
+fun main(){
+  val enumHandler = Test::class.accessEnum0()
+  enumHandler.appendEnumInstance("D")
+  enumHandler.newEnumInstance("E", 2)
+
+  Test.entries.forEach { println(it.name) }
 }

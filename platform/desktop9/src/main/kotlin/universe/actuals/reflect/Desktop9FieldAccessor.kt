@@ -1,18 +1,43 @@
 package universe.actuals.reflect
 
 import universe.expects.reflect.FieldAccessor
+import universe.util.Demodulator
 import java.lang.invoke.MethodHandles
 import java.lang.reflect.Field
+import java.lang.reflect.Modifier
 
 class Desktop9FieldAccessor(
   field: Field,
 ): FieldAccessor {
   companion object{
-    private val lookup = MethodHandles.lookup()
+    private val trustedCstr = MethodHandles.Lookup::class.java.getDeclaredConstructor(
+      Class::class.java, Class::class.java, Int::class.javaPrimitiveType
+    ).also {
+      Demodulator.makeModuleOpen(
+        MethodHandles::class.java.module,
+        MethodHandles::class.java.getPackage(),
+        Desktop9FieldAccessor::class.java.module
+      )
+      it.isAccessible = true
+    }
+    private val lookup = trustedCstr.newInstance(
+      Object::class.java, null, -1
+    )
   }
 
-  private val getter = lookup.unreflectGetter(field)!!
-  private val setter = lookup.unreflectSetter(field)!!
+  private val getter =
+    if (Modifier.isStatic(field.modifiers)) {
+      lookup.findStaticGetter(field.declaringClass, field.name, field.type)
+    } else {
+      lookup.findGetter(field.declaringClass, field.name, field.type)
+    }
+
+  private val setter =
+    if (Modifier.isStatic(field.modifiers)) {
+      lookup.findStaticSetter(field.declaringClass, field.name, field.type)
+    } else {
+      lookup.findSetter(field.declaringClass, field.name, field.type)
+    }
 
   override fun get(obj: Any): Any? = getter.invoke(obj)
   override fun getBoolean(obj: Any) = getter.invoke(obj) as Boolean
