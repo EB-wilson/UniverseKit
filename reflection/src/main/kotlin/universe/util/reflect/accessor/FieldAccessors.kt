@@ -95,63 +95,63 @@ fun checkStatic(field: Field){
 
 // static
 class FieldAccessorStatic<T: Any>(field: Field) : FieldAccessorBase(field) {
-  init{ checkNotStatic(field) }
+  init{ checkStatic(field) }
   fun get(): T = accessor.getStatic() as T
   fun set(instance: T) = accessor.setStatic(instance)
   operator fun getValue(instance: Any, property: KProperty<*>): T = accessor.getStatic() as T
   operator fun setValue(instance: Any, property: KProperty<*>, value: T) = accessor.setStatic(value)
 }
 class ByteAccessorStatic(field: Field): FieldAccessorBase(field) {
-  init{ checkNotStatic(field) }
+  init{ checkStatic(field) }
   fun get(): Byte = accessor.getStatic() as Byte
   fun set(instance: Byte) = accessor.setStatic(instance)
   operator fun getValue(instance: Unit, property: KProperty<*>): Byte = accessor.getStaticByte()
   operator fun setValue(instance: Unit, property: KProperty<*>, value: Byte) = accessor.setStaticByte(value)
 }
 class ShortAccessorStatic(field: Field): FieldAccessorBase(field) {
-  init{ checkNotStatic(field) }
+  init{ checkStatic(field) }
   fun get(): Short = accessor.getStatic() as Short
   fun set(instance: Short) = accessor.setStatic(instance)
   operator fun getValue(instance: Unit, property: KProperty<*>): Short = accessor.getStaticShort()
   operator fun setValue(instance: Unit, property: KProperty<*>, value: Short) = accessor.setStaticShort(value)
 }
 class IntAccessorStatic(field: Field): FieldAccessorBase(field) {
-  init{ checkNotStatic(field) }
+  init{ checkStatic(field) }
   fun get(): Int = accessor.getStatic() as Int
   fun set(instance: Int) = accessor.setStatic(instance)
   operator fun getValue(instance: Unit, property: KProperty<*>): Int = accessor.getStaticInt()
   operator fun setValue(instance: Unit, property: KProperty<*>, value: Int) = accessor.setStaticInt(value)
 }
 class LongAccessorStatic(field: Field): FieldAccessorBase(field) {
-  init{ checkNotStatic(field) }
+  init{ checkStatic(field) }
   fun get(): Long = accessor.getStatic() as Long
   fun set(instance: Long) = accessor.setStatic(instance)
   operator fun getValue(instance: Unit, property: KProperty<*>): Long = accessor.getStaticLong()
   operator fun setValue(instance: Unit, property: KProperty<*>, value: Long) = accessor.setStaticLong(value)
 }
 class FloatAccessorStatic(field: Field): FieldAccessorBase(field) {
-  init{ checkNotStatic(field) }
+  init{ checkStatic(field) }
   fun get(): Float = accessor.getStatic() as Float
   fun set(instance: Float) = accessor.setStatic(instance)
   operator fun getValue(instance: Unit, property: KProperty<*>): Float = accessor.getStaticFloat()
   operator fun setValue(instance: Unit, property: KProperty<*>, value: Float) = accessor.setStaticFloat(value)
 }
 class DoubleAccessorStatic(field: Field): FieldAccessorBase(field) {
-  init{ checkNotStatic(field) }
+  init{ checkStatic(field) }
   fun get(): Double = accessor.getStatic() as Double
   fun set(instance: Double) = accessor.setStatic(instance)
   operator fun getValue(instance: Unit, property: KProperty<*>): Double = accessor.getStaticDouble()
   operator fun setValue(instance: Unit, property: KProperty<*>, value: Double) = accessor.setStaticDouble(value)
 }
 class BooleanAccessorStatic(field: Field): FieldAccessorBase(field) {
-  init{ checkNotStatic(field) }
+  init{ checkStatic(field) }
   fun get(): Boolean = accessor.getStatic() as Boolean
   fun set(instance: Boolean) = accessor.setStatic(instance)
   operator fun getValue(instance: Unit, property: KProperty<*>): Boolean = accessor.getStaticBoolean()
   operator fun setValue(instance: Unit, property: KProperty<*>, value: Boolean) = accessor.setStaticBoolean(value)
 }
 class CharAccessorStatic(field: Field): FieldAccessorBase(field) {
-  init{ checkNotStatic(field) }
+  init{ checkStatic(field) }
   fun get(): Char = accessor.getStatic() as Char
   fun set(instance: Char) = accessor.setStatic(instance)
   operator fun getValue(instance: Unit, property: KProperty<*>): Char = accessor.getStaticChar()
