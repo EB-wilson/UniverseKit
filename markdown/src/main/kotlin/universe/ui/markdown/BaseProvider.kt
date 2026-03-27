@@ -59,6 +59,10 @@ class BaseProvider: MarkdownProvider, CurtainProvider, InsProvider, Strikethroug
     DataHandler(),
   )
 
+  override fun handleLayoutException(exception: Throwable) {
+    Log.err("Markdown layout error, detail info: ", exception)
+  }
+
   override fun RendererContext.add(node: Document) {
     //always create a root scope, set the max width.
     withScope(

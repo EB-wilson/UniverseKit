@@ -127,7 +127,11 @@ open class Markdown<P: MarkdownProvider> : WidgetGroup {
     }
     markdownDraws.clear()
 
-    renderer.renderLayout(node)
+    try {
+      renderer.renderLayout(node)
+    } catch (e: Throwable) {
+      provider.handleLayoutException(e)
+    }
 
     markdownDraws.addAll(rendererContext.renderResult())
     drawList = markdownDraws
@@ -162,7 +166,11 @@ open class Markdown<P: MarkdownProvider> : WidgetGroup {
   }
 
   open fun calculatePrefSize() {
-    renderer.renderLayout(node)
+    try {
+      renderer.renderLayout(node)
+    } catch (e: Throwable) {
+      provider.handleLayoutException(e)
+    }
 
     prefInvalid = false
 

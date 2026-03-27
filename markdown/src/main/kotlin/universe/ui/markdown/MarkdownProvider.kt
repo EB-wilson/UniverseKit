@@ -35,6 +35,8 @@ interface MarkdownProvider {
   fun extensions(): List<Extension>
   fun urlHandlers(): List<UrlHandler>
 
+  fun handleLayoutException(exception: Throwable)
+
   fun RendererContext.add(node: Document)
   fun RendererContext.add(node: Heading)
   fun RendererContext.add(node: Paragraph)
