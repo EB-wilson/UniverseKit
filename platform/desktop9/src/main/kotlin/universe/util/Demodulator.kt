@@ -1,6 +1,8 @@
 package universe.util
 
-import sun.misc.Unsafe
+import sun.reflect.ReflectionFactory
+import java.lang.invoke.MethodHandles
+import java.lang.invoke.VarHandle
 import java.lang.reflect.Method
 import java.util.*
 
@@ -16,32 +18,38 @@ import java.util.*
  * @author EBwilson
  */
 object Demodulator {
-  private const val FILTER_OFFSET = 112L
-
-  private lateinit var unsafe: Unsafe
+  private lateinit var reflectionFactory: ReflectionFactory
+  private lateinit var trustedLookup: MethodHandles.Lookup
+  private lateinit var fieldFilterHandle: VarHandle
+  //private lateinit var methodFilterHandle: VarHandle
+  private lateinit var opensHandle: VarHandle
+  private lateinit var exportHandle: VarHandle
 
   private var exportNative: Method? = null
 
   private var initialized = false
 
-  private var opensOffset: Long = -1
-  private var exportOffset: Long = -1
-
   fun setup() {
     if (initialized) return
 
-    val cstr = Unsafe::class.java.getDeclaredConstructor()
-    cstr.setAccessible(true)
-    unsafe = cstr.newInstance()
+    reflectionFactory = ReflectionFactory::class.java.getDeclaredConstructor()
+      .also { it.isAccessible = true }
+      .newInstance()
+    trustedLookup = reflectionFactory.newConstructorForSerialization(
+      MethodHandles.Lookup::class.java,
+      MethodHandles.Lookup::class.java.getDeclaredConstructor(
+        Class::class.java, Class::class.java, Int::class.javaPrimitiveType
+      )
+    ).newInstance(Any::class.java, null, -1) as MethodHandles.Lookup
+
+    val reflectClazz = Class.forName("jdk.internal.reflect.Reflection")
+    fieldFilterHandle = trustedLookup.findStaticVarHandle(reflectClazz, "fieldFilterMap", Map::class.java)
 
     clearFieldFilter()
 
     val moduleClazz = Module::class.java
-    val opensField = moduleClazz.getDeclaredField("openPackages")
-    val exportField = moduleClazz.getDeclaredField("exportedPackages")
-
-    opensOffset = unsafe.objectFieldOffset(opensField)
-    exportOffset = unsafe.objectFieldOffset(exportField)
+    opensHandle = trustedLookup.findVarHandle(moduleClazz, "openPackages", Map::class.java)
+    exportHandle = trustedLookup.findVarHandle(moduleClazz, "exportedPackages", Map::class.java)
 
     makeModuleOpen(
       moduleClazz.module,
@@ -88,16 +96,16 @@ object Demodulator {
   private fun makeModuleOpen(from: Module, pac: String, to: Module) {
     exportNative?.invoke(null, from, pac, to)
 
-    var opensMap = unsafe.getObjectVolatile(from, opensOffset) as? MutableMap<String, MutableSet<Module>>
+    var opensMap = opensHandle.getVolatile(from) as? MutableMap<String, MutableSet<Module>>
     if (opensMap == null) {
       opensMap = mutableMapOf()
-      unsafe.putObjectVolatile(from, opensOffset, opensMap)
+      opensHandle.setVolatile(from, opensMap)
     }
 
-    var exportsMap = unsafe.getObjectVolatile(from, exportOffset) as? MutableMap<String, MutableSet<Module>>
+    var exportsMap = exportHandle.getVolatile(from) as? MutableMap<String, MutableSet<Module>>
     if (exportsMap == null) {
       exportsMap = mutableMapOf()
-      unsafe.putObjectVolatile(from, exportOffset, exportsMap)
+      exportHandle.setVolatile(from, exportsMap)
     }
 
     val opens = opensMap.computeIfAbsent(pac) { e -> mutableSetOf() }
@@ -121,8 +129,7 @@ object Demodulator {
   }
 
   private fun clearFieldFilter() {
-    val clazz = Class.forName("jdk.internal.reflect.Reflection")
-    val map = unsafe.getObject(clazz, FILTER_OFFSET) as MutableMap<*, *>
-    map.clear()
+    val map = fieldFilterHandle.getVolatile() as? MutableMap<*, *>
+    map?.clear()
   }
 }
