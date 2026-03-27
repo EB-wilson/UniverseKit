@@ -6,6 +6,7 @@ import arc.files.Fi
 import arc.freetype.FreeTypeFontGenerator
 import arc.freetype.FreeTypeFontGenerator.FreeTypeFontParameter
 import arc.graphics.Color
+import arc.graphics.g2d.Draw
 import arc.graphics.g2d.Fill
 import arc.graphics.g2d.Lines
 import arc.scene.style.BaseDrawable
@@ -61,7 +62,6 @@ object MarkdownStyles {
     lineColor = Color.gray
     lineStroke = 2f
 
-
     textFont = Markdown.FontEntry(
       fontModifier = Fonts.def,
       colorModifier = Color.white,
@@ -89,11 +89,26 @@ object MarkdownStyles {
       marginX = 16f,
       marginY = 16f,
     )
-    curtain = Markdown.Box(
+    curtainBox = Markdown.Box(
       (Tex.whiteui as TextureRegionDrawable).tint(Pal.darkestestGray),
+      paddingX = 0f,
+      paddingY = -6f,
       marginX = 6f,
       marginY = 6f,
     )
+    underLine = object: BaseDrawable(){
+      override fun draw(x: Float, y: Float, width: Float, height: Float) {
+        val stroke = Scl.scl(2f)
+        Lines.stroke(stroke)
+        Lines.line(x, y - stroke, x + width, y - stroke)
+      }
+    }
+    deleteLine = object: BaseDrawable(){
+      override fun draw(x: Float, y: Float, width: Float, height: Float) {
+        Lines.stroke(Scl.scl(2f))
+        Lines.line(x, y + height/2f, x + width, y + height/2f )
+      }
+    }
 
     codeFont = Markdown.FontEntry(
       fontModifier = mono,
@@ -111,7 +126,7 @@ object MarkdownStyles {
       marginX = 16f,
       marginY = 16f,
     )
-    codeBlockSliderStyle = Styles.noBarPane
+    sliderStyle = Styles.noBarPane
 
     linkFont = Markdown.FontEntry(
       fontModifier = Fonts.outline,
@@ -155,15 +170,37 @@ object MarkdownStyles {
     )
 
     tableBack1 = Markdown.Box(
-      (Tex.whiteui as TextureRegionDrawable).tint(Tmp.c1.set(Pal.darkestGray).a(0.7f)),
-      paddingX = 24f,
-      paddingY = 18f,
+      makeTableCellBack(
+        Pal.darkestGray.cpy().a(0.7f),
+        Color.lightGray,
+        Scl.scl(2f),
+      ),
+      marginX = 32f,
+      marginY = 32f,
     )
     tableBack2 = Markdown.Box(
-      (Tex.whiteui as TextureRegionDrawable).tint(Tmp.c1.set(Pal.darkerGray).a(0.7f)),
-      paddingX = 24f,
-      paddingY = 18f,
+      makeTableCellBack(
+        Pal.darkerGray.cpy().a(0.7f),
+        Color.lightGray,
+        Scl.scl(2f),
+      ),
+      marginX = 32f,
+      marginY = 32f,
     )
+  }
+
+  fun makeTableCellBack(
+    backColor: Color,
+    lineColor: Color,
+    lineStroke: Float,
+  ) = object: BaseDrawable(){
+    override fun draw(x: Float, y: Float, width: Float, height: Float) {
+      Draw.color(backColor)
+      Fill.rect(x + width/2, y + height/2, width, height)
+      Lines.stroke(lineStroke, lineColor)
+      Lines.line(x, y, x + width, y)
+      Lines.line(x, y + height, x + width, y + height)
+    }
   }
 
   private val values = intArrayOf(1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1)

@@ -1,6 +1,7 @@
 package universe.ui.markdown.extensions.ins
 
 import org.commonmark.ext.ins.Ins
+import org.commonmark.node.CustomNode
 import org.commonmark.node.Node
 import universe.ui.markdown.LayoutNodeRenderer
 import universe.ui.markdown.NoActionVisitor
@@ -10,8 +11,10 @@ class InsNodeRenderer(
   element: RendererContext,
   provider: InsProvider
 ) : LayoutNodeRenderer<InsProvider>(element, provider) {
-  private inner class Visitor: NoActionVisitor(), InsVisitor {
-    override fun visit(ins: Ins) { provider.apply { context.add(ins) } }
+  private inner class Visitor: NoActionVisitor() {
+    override fun visit(customNode: CustomNode) {
+      if (customNode is Ins) provider.apply { context.add(customNode) }
+    }
   }
   private val visitorInst = Visitor()
 

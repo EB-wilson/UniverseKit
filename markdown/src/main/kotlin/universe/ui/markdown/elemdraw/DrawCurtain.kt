@@ -1,8 +1,8 @@
 package universe.ui.markdown.elemdraw
 
-import arc.graphics.Color
-import arc.graphics.g2d.Font
 import arc.scene.Element
+import arc.scene.event.ClickListener
+import arc.scene.event.Touchable
 import arc.scene.style.Drawable
 import arc.scene.ui.Image
 import arc.util.pooling.Pools
@@ -10,59 +10,51 @@ import mindustry.gen.Tex
 import universe.ui.markdown.Markdown
 import universe.ui.markdown.RendererContext
 
-open class DrawCurtain: DrawStr(), Markdown.ActivityDrawer {
+open class DrawCurtain: Markdown.MarkdownDraw(), Markdown.ActivityDrawer {
   companion object {
     fun get(
       curtainDraw: Drawable,
-      str: String,
-      font: Font,
-      color: Color,
-      scl: Float,
-      growthLeft: Float,
-      growthRight: Float,
-      growthTop: Float,
-      growthBottom: Float
     ): DrawCurtain = Pools.obtain(DrawCurtain::class.java){ DrawCurtain() }.apply {
       this.curtainDraw = curtainDraw
-      this.text = str
-      this.font = font
-      this.scl = scl
-      this.color = color
-      this.growthLeft = growthLeft
-      this.growthRight = growthRight
-      this.growthTop = growthTop
-      this.growthBottom = growthBottom
     }
   }
 
   var curtainDraw: Drawable = Tex.nomap
-  var growthLeft = 0f
-  var growthRight = 0f
-  var growthTop = 0f
-  var growthBottom = 0f
 
-  private lateinit var curtain: Image
+  private lateinit var curtain: CurtainElem
+
+  override val activeElement: Element get() = curtain
 
   override fun reset() {
     super.reset()
-    growthLeft = 0f
-    growthRight = 0f
-    growthTop = 0f
-    growthBottom = 0f
+    curtainDraw = Tex.nomap
   }
 
-  override fun prefWidth(): Float = super.prefWidth() + growthLeft + growthRight
-  override fun prefHeight(): Float = super.prefHeight() + growthTop + growthBottom
+  override fun prefWidth(): Float = curtain.prefWidth
+  override fun prefHeight(): Float = curtain.prefHeight
 
   override fun setup(scope: RendererContext.Scope) {
-    super.setup(scope)
-
-    curtain = Image(curtainDraw)
+    curtain = CurtainElem(curtainDraw).apply {
+      touchable = Touchable.enabled
+    }
   }
 
   override fun draw(x: Float, y: Float) {
-    super.draw(x + growthLeft, y - growthTop)
+    curtainDraw.draw(x + offsetX, y - offsetY - height, width, height)
   }
 
-  override fun getActiveElement(): Element = curtain
+  class CurtainElem(drawable: Drawable): Image(drawable){
+    private var clickListener = ClickListener()
+
+    init {
+      addListener(clickListener)
+      update { color.a = if (clickListener.isOver || clickListener.isPressed) 0f else 1f }
+    }
+
+    fun setClickListener(listener: ClickListener){
+      removeListener(clickListener)
+      clickListener = listener
+      addListener(listener)
+    }
+  }
 }

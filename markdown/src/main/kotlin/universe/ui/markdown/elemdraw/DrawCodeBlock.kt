@@ -46,6 +46,8 @@ open class DrawCodeBlock: Markdown.MarkdownDraw(), Markdown.ActivityDrawer {
   private lateinit var pane: ScrollPane
   private lateinit var resElem: Stack
 
+  override val activeElement: Element get() = resElem
+
   override fun reset() {
     super.reset()
     font = Fonts.def
@@ -91,6 +93,4 @@ open class DrawCodeBlock: Markdown.MarkdownDraw(), Markdown.ActivityDrawer {
   }
 
   override fun draw(x: Float, y: Float) {}
-
-  override fun getActiveElement(): Element = resElem
 }

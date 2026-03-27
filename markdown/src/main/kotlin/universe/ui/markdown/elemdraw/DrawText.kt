@@ -3,8 +3,6 @@ package universe.ui.markdown.elemdraw
 import arc.func.Cons
 import arc.graphics.Color
 import arc.graphics.g2d.Font
-import arc.scene.event.ClickListener
-import arc.scene.ui.Button
 import arc.scene.ui.layout.Scl
 import universe.ui.markdown.RendererContext
 
@@ -37,7 +35,7 @@ fun RendererContext.drawTextWrap(
   var currOff = curr.currOffsetX
   var currIndex = 0
 
-  if (curr.boundX > 0) {
+  if (mdShouldWrap) {
     str.forEach { char ->
       builder.append(char)
       currIndex++

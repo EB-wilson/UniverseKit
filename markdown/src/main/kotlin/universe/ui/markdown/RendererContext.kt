@@ -3,11 +3,9 @@ package universe.ui.markdown
 import arc.func.Boolf
 import arc.func.Cons
 import arc.func.Func
-import arc.func.Func2
 import arc.func.Prov
 import arc.graphics.Color
 import arc.graphics.g2d.Font
-import arc.scene.style.Drawable
 import arc.scene.ui.layout.Scl
 import arc.struct.ObjectMap
 import arc.struct.Seq
@@ -15,7 +13,6 @@ import mindustry.ui.Fonts
 import org.commonmark.node.Node
 import universe.ui.markdown.Markdown.MarkdownDraw
 import universe.ui.markdown.elemdraw.DrawImg
-import java.io.InputStream
 import kotlin.math.max
 
 abstract class RendererContext protected constructor(
@@ -42,10 +39,13 @@ abstract class RendererContext protected constructor(
   val mdStyle get() = element.getStyle()
   val mdWidth get() = element.width
   val mdHeight get() = element.height
+  val mdShouldWrap get() = element.wrapContent
 
   fun mdInvalidate() {
     element.invalidate()
   }
+
+  fun createSubMarkdown(node: Node) = Markdown(element, node)
 
   abstract fun render(node: Node)
 
@@ -61,8 +61,8 @@ abstract class RendererContext protected constructor(
     val marginTop: Float,
     val marginBottom: Float,
     val boundX: Float,
-    fillX: Boolean,
-    val copyBreak: Boolean
+    val fillX: Boolean,
+    val inlineBreak: Boolean
   ){
     internal var tags = mutableSetOf<String>()
 
@@ -99,6 +99,10 @@ abstract class RendererContext protected constructor(
     fun findAncestral(callback: Boolf<Scope>): Scope? {
       if (callback.get(this)) return this
       return parent?.findAncestral(callback)
+    }
+
+    fun scopeDrawTiming(timing: Markdown.DrawTiming){
+      scopeDraw?.drawTiming = timing
     }
 
     fun Markdown.FontEntry.applyFont(){
@@ -149,6 +153,10 @@ abstract class RendererContext protected constructor(
     attachedVars.put(name, value)
   }
 
+  fun invalidVar(name: String) {
+    attachedVars.remove(name)
+  }
+
   @Suppress("UNCHECKED_CAST")
   fun <T> getVar(name: String): T? {
     return attachedVars.get(name) as? T
@@ -173,12 +181,13 @@ abstract class RendererContext protected constructor(
 
   fun withScope(
     box: Markdown.Box,
+    drawProvider: Prov<MarkdownDraw>? = box.background?.let{ Prov{ DrawImg.get(box.background) } },
     boundX: Float = (currentScope?.boundX ?: 0f) - box.paddingRight,
     fillX: Boolean = false,
-    copyBreak: Boolean = false,
+    inlineBreak: Boolean = false,
     callback: Scope.() -> Unit,
   ) = withScope(
-    drawProvider = box.background?.let{ { DrawImg.get(box.background) } },
+    drawProvider = drawProvider,
     paddingLeft = Scl.scl(box.paddingLeft),
     paddingRight = Scl.scl(box.paddingRight),
     paddingTop = Scl.scl(box.paddingTop),
@@ -189,17 +198,18 @@ abstract class RendererContext protected constructor(
     marginBottom = Scl.scl(box.marginBottom),
     boundX = boundX,
     fillX = fillX,
-    copyBreak = copyBreak,
+    inlineBreak = inlineBreak,
     callback = callback,
   )
 
   fun insertScope(
     box: Markdown.Box,
+    drawProvider: Prov<MarkdownDraw>? = box.background?.let{ Prov{ DrawImg.get(box.background) } },
     boundX: Float = (currentScope?.boundX ?: 0f) - box.paddingRight,
     fillX: Boolean = false,
-    copyBreak: Boolean = false,
+    inlineBreak: Boolean = false,
   ) = insertScope(
-    drawProvider = box.background?.let{ { DrawImg.get(box.background) } },
+    drawProvider = drawProvider,
     paddingLeft = Scl.scl(box.paddingLeft),
     paddingRight = Scl.scl(box.paddingRight),
     paddingTop = Scl.scl(box.paddingTop),
@@ -210,7 +220,7 @@ abstract class RendererContext protected constructor(
     marginBottom = Scl.scl(box.marginBottom),
     boundX = boundX,
     fillX = fillX,
-    copyBreak = copyBreak,
+    inlineBreak = inlineBreak,
   )
 
   fun withScope(
@@ -225,7 +235,7 @@ abstract class RendererContext protected constructor(
     marginBottom: Float = 0f,
     boundX: Float = (currentScope?.boundX ?: 0f) - paddingRight,
     fillX: Boolean = false,
-    copyBreak: Boolean = false,
+    inlineBreak: Boolean = false,
     callback: Scope.() -> Unit
   ) {
     insertScope(
@@ -234,7 +244,7 @@ abstract class RendererContext protected constructor(
       marginLeft, marginRight, marginTop, marginBottom,
       boundX,
       fillX,
-      copyBreak,
+      inlineBreak,
     ).callback()
     popScope()
   }
@@ -251,7 +261,7 @@ abstract class RendererContext protected constructor(
     marginBottom: Float = 0f,
     boundX: Float = (currentScope?.boundX ?: 0f) - paddingRight,
     fillX: Boolean = false,
-    copyBreak: Boolean = false,
+    inlineBreak: Boolean = false,
   ): Scope {
     val scope = Scope(
       drawProvider,
@@ -260,14 +270,17 @@ abstract class RendererContext protected constructor(
       marginLeft, marginRight, marginTop, marginBottom,
       boundX,
       fillX,
-      copyBreak,
+      inlineBreak,
     )
 
     if (currentScope == null) {
       rootScope = scope
     }
 
-    if (scope.scopeDraw != null) markdownDraws.add(scope.scopeDraw)
+    scope.scopeDraw?.also { d ->
+      d.setup(scope)
+      markdownDraws.add(d)
+    }
 
     currentScope = scope
 
@@ -280,7 +293,8 @@ abstract class RendererContext protected constructor(
     val last = curr.parent
 
     if (last != null) {
-      last.height = max(last.height, curr.offsetY + curr.height - last.offsetY + last.paddingBottom)
+      last.width = max(last.width, curr.offsetX + curr.width - last.offsetX + curr.paddingRight + last.marginRight)
+      last.height = max(last.height, curr.offsetY + curr.height - last.offsetY + curr.paddingBottom + last.marginBottom)
       last.rowHeight = max(last.rowHeight, curr.height + curr.paddingTop + curr.paddingBottom)
       last.currOffsetX += curr.width + curr.paddingLeft + curr.paddingRight
     }
@@ -331,7 +345,7 @@ abstract class RendererContext protected constructor(
 
   fun row(rowPadding: Float): Scope {
     val last = getScope()
-    if (last.copyBreak) {
+    if (last.inlineBreak) {
       if (last.drawProvider != null && last.width <= last.marginLeft + last.marginRight) {
         markdownDraws.remove(last.scopeDraw)
       }
@@ -343,7 +357,7 @@ abstract class RendererContext protected constructor(
     curr.currOffsetY += curr.rowHeight + rowPadding
     curr.rowHeight = 0f
 
-    if (last.copyBreak) {
+    if (last.inlineBreak) {
       return insertScope(
         last.drawProvider,
         last.paddingLeft, last.paddingRight, last.paddingTop, last.paddingBottom,

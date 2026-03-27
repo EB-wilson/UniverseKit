@@ -6,15 +6,19 @@ import arc.graphics.Texture
 import arc.graphics.g2d.TextureRegion
 import arc.math.Mathf
 import arc.scene.event.ClickListener
+import arc.scene.style.BaseDrawable
 import arc.scene.style.TextureRegionDrawable
 import arc.scene.ui.Button
 import arc.scene.ui.layout.Scl
+import arc.scene.ui.layout.Table
+import arc.util.Align
 import arc.util.Log
 import arc.util.Scaling
 import mindustry.gen.Tex
 import org.commonmark.ext.gfm.strikethrough.Strikethrough
 import org.commonmark.ext.gfm.tables.TableBlock
 import org.commonmark.ext.gfm.tables.TableBody
+import org.commonmark.ext.gfm.tables.TableCell
 import org.commonmark.ext.gfm.tables.TableHead
 import org.commonmark.ext.gfm.tables.TableRow
 import org.commonmark.ext.image.attributes.ImageAttributes
@@ -29,10 +33,10 @@ import universe.ui.markdown.extensions.ins.InsExtension
 import universe.ui.markdown.extensions.ins.InsProvider
 import universe.ui.markdown.extensions.strikethrough.StrikethroughExtension
 import universe.ui.markdown.extensions.strikethrough.StrikethroughProvider
+import universe.ui.markdown.extensions.table.CellShadowBox
 import universe.ui.markdown.extensions.table.TableProvider
 import universe.ui.markdown.extensions.table.TablesExtension
 import universe.ui.markdown.url.*
-import javax.swing.table.TableColumn
 import kotlin.concurrent.thread
 
 private var clickListenerField = Button::class.java.getDeclaredField("clickListener")
@@ -58,7 +62,7 @@ class BaseProvider: MarkdownProvider, CurtainProvider, InsProvider, Strikethroug
   override fun RendererContext.add(node: Document) {
     //always create a root scope, set the max width.
     withScope(
-      boundX = if (mdWidth <= 0) -1f else mdWidth
+      boundX = mdWidth
     ) {
       mdStyle.textFont.applyFont()
       renderChildren(node)
@@ -96,7 +100,7 @@ class BaseProvider: MarkdownProvider, CurtainProvider, InsProvider, Strikethroug
   override fun RendererContext.add(node: Link) {
     val text = (node.firstChild as? Text)?.literal?:""
     withScope(
-      copyBreak = true
+      inlineBreak = true
     ) {
       mdStyle.linkFont.applyFont()
       val clickListener = ClickListener()
@@ -133,7 +137,7 @@ class BaseProvider: MarkdownProvider, CurtainProvider, InsProvider, Strikethroug
   override fun RendererContext.add(node: Code) {
     withScope(
       box = mdStyle.codeBox,
-      copyBreak = true,
+      inlineBreak = true,
     ){
       mdStyle.codeFont.applyFont()
 
@@ -221,7 +225,7 @@ class BaseProvider: MarkdownProvider, CurtainProvider, InsProvider, Strikethroug
         fontScale,
         node.literal.substring(0, node.literal.length - 1),
         "",
-        mdStyle.codeBlockSliderStyle,
+        mdStyle.sliderStyle,
       ))
     }
   }
@@ -237,7 +241,7 @@ class BaseProvider: MarkdownProvider, CurtainProvider, InsProvider, Strikethroug
         fontScale,
         node.literal.substring(0, node.literal.length - 1),
         node.info,
-        mdStyle.codeBlockSliderStyle
+        mdStyle.sliderStyle
       ))
     }
   }
@@ -326,36 +330,134 @@ class BaseProvider: MarkdownProvider, CurtainProvider, InsProvider, Strikethroug
   }
 
   override fun RendererContext.add(node: Curtain) {
-
+    withScope(
+      box = mdStyle.curtainBox,
+      drawProvider = mdStyle.curtainBox.background?.let { { DrawCurtain.get(it) } },
+      inlineBreak = true
+    ) {
+      drawTextWrap(
+        str = node.literal,
+        font = font,
+        color = fontColor,
+        scl = fontScale,
+      )
+    }
   }
 
   override fun RendererContext.add(node: Ins) {
-    TODO("Not yet implemented")
+    withScope(
+      box = Markdown.Box(mdStyle.underLine),
+      inlineBreak = true
+    ) {
+      scopeDrawTiming(Markdown.DrawTiming.POST)
+
+      renderChildren(node)
+    }
   }
 
   override fun RendererContext.add(node: Strikethrough) {
-    TODO("Not yet implemented")
+    withScope(
+      box = Markdown.Box(mdStyle.deleteLine),
+      inlineBreak = true
+    ) {
+      scopeDrawTiming(Markdown.DrawTiming.POST)
+
+      renderChildren(node)
+    }
   }
 
   override fun RendererContext.add(node: TableBlock) {
-    TODO("Not yet implemented")
+    val tableBuilder = TableBuilder(this)
+    putVar("curr-table-builder", tableBuilder)
+    renderChildren(node)
+    invalidVar("curr-table-builder")
+
+    draw(DrawTable.get(
+      tableBuilder.result(),
+      mdStyle.sliderStyle
+    ))
+
+    row(Scl.scl(mdStyle.paragraphPadding))
   }
 
   override fun RendererContext.add(node: TableHead) {
-    TODO("Not yet implemented")
+    val builder = getVar<TableBuilder>("curr-table-builder"){
+      throw IllegalStateException("Incorrect table structure, no top level available.")
+    }
+    builder.makeRow()
+    renderChildren(node)
   }
 
   override fun RendererContext.add(node: TableBody) {
-    TODO("Not yet implemented")
+    renderChildren(node)
   }
 
   override fun RendererContext.add(node: TableRow) {
-    TODO("Not yet implemented")
+    val builder = getVar<TableBuilder>("curr-table-builder"){
+      throw IllegalStateException("Incorrect table structure, no top level available.")
+    }
+    builder.makeRow()
+    renderChildren(node)
   }
 
-  override fun RendererContext.add(node: TableColumn) {
-    TODO("Not yet implemented")
+  override fun RendererContext.add(node: TableCell) {
+    val builder = getVar<TableBuilder>("curr-table-builder"){
+      throw IllegalStateException("Incorrect table structure, no top level available.")
+    }
+    builder.pushCell(node)
   }
 
+  override fun RendererContext.add(node: CellShadowBox) {
+    withScope(
+      box = node.cellBox,
+      drawProvider = null,
+      boundX = mdWidth,
+      fillX = true
+    ) {
+      renderChildren(node)
+    }
+  }
 
+  private class TableBuilder(
+    val context: RendererContext
+  ){
+    companion object {
+      val transparent = BaseDrawable()
+    }
+
+    private val result = Table()
+    private var currColumn = 0
+
+    fun result() = result
+
+    fun makeRow(){
+      currColumn = 0
+      result.row()
+    }
+
+    fun pushCell(node: TableCell){
+      context.apply {
+        val back1 = mdStyle.tableBack1
+        val back2 = mdStyle.tableBack2
+
+        val back = if (currColumn%2 == 0) back1 else back2
+
+        result.table(back.background ?: transparent) { t ->
+          t.align(when(node.alignment){
+            TableCell.Alignment.LEFT -> Align.left
+            TableCell.Alignment.CENTER -> Align.center
+            TableCell.Alignment.RIGHT -> Align.right
+          })
+          t.add(createSubMarkdown(
+            CellShadowBox(node, back)
+          ).also { it.wrapContent = false })
+        }.fill()
+          .marginTop(back.paddingTop)
+          .marginLeft(back.paddingLeft)
+          .marginRight(back.paddingRight)
+          .marginBottom(back.paddingBottom)
+      }
+      currColumn++
+    }
+  }
 }

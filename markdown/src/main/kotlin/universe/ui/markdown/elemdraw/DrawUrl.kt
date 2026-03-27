@@ -39,6 +39,8 @@ open class DrawUrl: Markdown.MarkdownDraw(), Markdown.ActivityDrawer {
 
   internal lateinit var button: TextButton
 
+  override val activeElement: Element get() = button
+
   override fun reset() {
     super.reset()
     text = ""
@@ -68,6 +70,4 @@ open class DrawUrl: Markdown.MarkdownDraw(), Markdown.ActivityDrawer {
   }
 
   override fun draw(x: Float, y: Float) {}
-
-  override fun getActiveElement(): Element = button
 }

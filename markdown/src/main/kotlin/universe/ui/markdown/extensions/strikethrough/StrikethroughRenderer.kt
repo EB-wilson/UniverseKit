@@ -1,6 +1,7 @@
 package universe.ui.markdown.extensions.strikethrough
 
 import org.commonmark.ext.gfm.strikethrough.Strikethrough
+import org.commonmark.node.CustomNode
 import org.commonmark.node.Node
 import universe.ui.markdown.LayoutNodeRenderer
 import universe.ui.markdown.NoActionVisitor
@@ -10,8 +11,10 @@ class StrikethroughRenderer(
   context: RendererContext,
   provider: StrikethroughProvider,
 ) : LayoutNodeRenderer<StrikethroughProvider>(context, provider) {
-  private inner class Visitor: NoActionVisitor(), StrikethroughVisitor {
-    override fun visit(strikethrough: Strikethrough) { provider.apply { context.add(strikethrough) } }
+  private inner class Visitor: NoActionVisitor() {
+    override fun visit(customNode: CustomNode) {
+      if (customNode is Strikethrough) provider.apply { context.add(customNode) }
+    }
   }
   private val visitorInst = Visitor()
 
