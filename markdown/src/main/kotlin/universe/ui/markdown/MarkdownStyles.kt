@@ -75,7 +75,7 @@ object MarkdownStyles {
       fontModifier = strong,
     )
     emFont = Markdown.FontEntry(
-      colorModifier = Pal.accent,
+      isItalic = true,
     )
     headFonts = Array(6){ i ->
       Markdown.FontEntry(
@@ -103,7 +103,7 @@ object MarkdownStyles {
         Lines.line(x, y - stroke, x + width, y - stroke)
       }
     }
-    deleteLine = object: BaseDrawable(){
+    strikethrough = object: BaseDrawable(){
       override fun draw(x: Float, y: Float, width: Float, height: Float) {
         Lines.stroke(Scl.scl(2f))
         Lines.line(x, y + height/2f, x + width, y + height/2f )

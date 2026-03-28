@@ -206,6 +206,7 @@ open class Markdown<P: MarkdownProvider> : WidgetGroup {
 
   data class FontEntry(
     val fontModifier: Font? = null,
+    val isItalic: Boolean? = null,
     val colorModifier: Color? = null,
     val scaleModifier: Float? = null,
   )
@@ -242,7 +243,7 @@ open class Markdown<P: MarkdownProvider> : WidgetGroup {
 
   class MarkdownStyle {
     private companion object{
-      val defaultFont = FontEntry(Fonts.def, Color.white, 1f)
+      val defaultFont = FontEntry(Fonts.def, false, Color.white, 1f)
       val defaultBox = Box()
       val defaultDraw = BaseDrawable()
     }
@@ -265,7 +266,7 @@ open class Markdown<P: MarkdownProvider> : WidgetGroup {
     var quoteBox: Box = defaultBox
     var curtainBox: Box = defaultBox
     var underLine: Drawable = defaultDraw
-    var deleteLine: Drawable = defaultDraw
+    var strikethrough: Drawable = defaultDraw
 
     //code
     var codeFont: FontEntry = defaultFont

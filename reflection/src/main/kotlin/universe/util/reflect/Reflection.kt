@@ -134,10 +134,10 @@ object Reflection {
   //  Field
   //=========
   // member
-  @JvmStatic inline fun <reified O : Any, reified T: Any> accessField(property: KProperty<T>) =
+  @JvmStatic inline fun <reified O : Any, reified T: Any?> accessField(property: KProperty<T>) =
     property.javaField?.let { FieldAccessor<O, T>(it) }
     ?: IllegalArgumentException("this property don't have a java field.")
-  @JvmStatic inline fun <reified O : Any, reified T: Any> accessField(name: String) =
+  @JvmStatic inline fun <reified O : Any, reified T: Any?> accessField(name: String) =
     FieldAccessor<O, T>(reflection.findField(O::class, name).also {
       if (!it.type.isAssignableFrom(T::class.asType()))
         throw IllegalArgumentException("field $it type is not instance of ${T::class.asType()}")
@@ -212,7 +212,7 @@ object Reflection {
     //if (Modifier.isFinal(field.modifiers))
     //  throw IllegalArgumentException("The static final field is always immutable, you shouldn't reflect these fields")
   }
-  @JvmStatic inline fun <reified T: Any> accessStaticField(property: KProperty<T>) =
+  @JvmStatic inline fun <reified T: Any?> accessStaticField(property: KProperty<T>) =
     property.javaField?.let { FieldAccessorStatic<T>(it) }
     ?: throw IllegalArgumentException("this property don't have a java field.")
   @JvmStatic inline fun <reified T: Any> KClass<*>.accessField(name: String) =

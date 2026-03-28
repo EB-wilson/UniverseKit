@@ -111,13 +111,10 @@ class BaseProvider: MarkdownProvider, CurtainProvider, InsProvider, Strikethroug
 
       drawTextWrap(
         str = text,
-        font = font,
-        color = fontColor,
-        scl = fontScale
       ){ s ->
         val draw = DrawUrl.get(
           s.toString(), node.destination,
-          font, fontColor, fontScale,
+          font, fontIsItalic, fontColor, fontScale,
           mdStyle.linkOverColor
         )
         draw(draw)
@@ -132,9 +129,6 @@ class BaseProvider: MarkdownProvider, CurtainProvider, InsProvider, Strikethroug
   override fun RendererContext.add(node: Text) {
     drawTextWrap(
       str = node.literal,
-      font = getScope().font,
-      color = getScope().fontColor,
-      scl = getScope().fontScale,
     )
   }
 
@@ -147,9 +141,6 @@ class BaseProvider: MarkdownProvider, CurtainProvider, InsProvider, Strikethroug
 
       drawTextWrap(
         str = node.literal,
-        font = font,
-        color = fontColor,
-        scl = fontScale,
       )
     }
   }
@@ -197,6 +188,7 @@ class BaseProvider: MarkdownProvider, CurtainProvider, InsProvider, Strikethroug
           draw(DrawStr.get(
             "${format(n)}.",
             font,
+            false,
             fontColor,
             fontScale
           ))
@@ -319,9 +311,6 @@ class BaseProvider: MarkdownProvider, CurtainProvider, InsProvider, Strikethroug
   override fun RendererContext.add(node: SoftLineBreak) {
     drawTextWrap(
       str = " ",
-      font = getScope().font,
-      color = getScope().fontColor,
-      scl = getScope().fontScale,
     )
   }
 
@@ -341,9 +330,6 @@ class BaseProvider: MarkdownProvider, CurtainProvider, InsProvider, Strikethroug
     ) {
       drawTextWrap(
         str = node.literal,
-        font = font,
-        color = fontColor,
-        scl = fontScale,
       )
     }
   }
@@ -361,7 +347,7 @@ class BaseProvider: MarkdownProvider, CurtainProvider, InsProvider, Strikethroug
 
   override fun RendererContext.add(node: Strikethrough) {
     withScope(
-      box = Markdown.Box(mdStyle.deleteLine),
+      box = Markdown.Box(mdStyle.strikethrough),
       inlineBreak = true
     ) {
       scopeDrawTiming(Markdown.DrawTiming.POST)

@@ -24,7 +24,7 @@ private fun checkNotStatic(field: Field) {
 }
 
 // Field accessors
-class FieldAccessor<O: Any, T: Any>(field: Field): FieldAccessorBase(field) {
+class FieldAccessor<O: Any, T: Any?>(field: Field): FieldAccessorBase(field) {
   init{ checkNotStatic(field) }
   fun get(instance: O): T = accessor.get(instance) as T
   fun set(instance: O, value: T) = accessor.set(instance, value) as T
@@ -94,7 +94,7 @@ fun checkStatic(field: Field){
 }
 
 // static
-class FieldAccessorStatic<T: Any>(field: Field) : FieldAccessorBase(field) {
+class FieldAccessorStatic<T: Any?>(field: Field) : FieldAccessorBase(field) {
   init{ checkStatic(field) }
   fun get(): T = accessor.getStatic() as T
   fun set(instance: T) = accessor.setStatic(instance)

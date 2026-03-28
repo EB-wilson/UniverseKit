@@ -2,6 +2,8 @@ package universe.ui.markdown.elemdraw
 
 import arc.graphics.Color
 import arc.graphics.g2d.Font
+import arc.math.Affine2
+import arc.math.Mat
 import arc.scene.Element
 import arc.scene.ui.TextButton
 import arc.util.pooling.Pools
@@ -17,6 +19,7 @@ open class DrawUrl: Markdown.MarkdownDraw(), Markdown.ActivityDrawer {
       str: String,
       url: String,
       font: Font,
+      italic: Boolean = false,
       color: Color,
       scl: Float,
       overColor: Color = color,
@@ -24,6 +27,7 @@ open class DrawUrl: Markdown.MarkdownDraw(), Markdown.ActivityDrawer {
       this.text = str
       this.url = url
       this.font = font
+      this.italic = italic
       this.color = color
       this.scl = scl
       this.overColor = overColor
@@ -33,6 +37,7 @@ open class DrawUrl: Markdown.MarkdownDraw(), Markdown.ActivityDrawer {
   var text: String = ""
   var url: String = ""
   var font: Font = Fonts.def
+  var italic: Boolean = false
   var color: Color = Color.white
   var scl: Float = 0f
   var overColor: Color = color
@@ -55,7 +60,24 @@ open class DrawUrl: Markdown.MarkdownDraw(), Markdown.ActivityDrawer {
   override fun prefHeight(): Float = button.height
 
   override fun setup(scope: RendererContext.Scope) {
-    button = TextButton(text, makeStyle())
+    button = object: TextButton(text, makeStyle()){
+      private val affineTrans = Mat()
+      private val trans = Mat()
+      private val affine2 = Affine2()
+
+      override fun applyTransform(transform: Mat) {
+        if (italic) {
+          super.applyTransform(
+            trans.set(transform)
+              .mul(affineTrans.set(affine2.idt().shear(0.25f, 0f)))
+          )
+        }
+        else {
+          super.applyTransform(transform)
+        }
+      }
+    }
+    button.isTransform = italic
     button.label.setWrap(false)
     button.label.setFontScale(scl)
     button.clicked { button.fire(UrlClickedEvent(url)) }

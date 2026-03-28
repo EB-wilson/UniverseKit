@@ -80,6 +80,7 @@ abstract class RendererContext protected constructor(
     var rowHeight: Float = 0f
 
     var font: Font = parent?.font?: Fonts.def
+    var fontIsItalic: Boolean = parent?.fontIsItalic ?: false
     var fontColor: Color = parent?.fontColor?: Color.white
     var fontScale: Float = parent?.fontScale?: 1f
 
@@ -107,6 +108,7 @@ abstract class RendererContext protected constructor(
 
     fun Markdown.FontEntry.applyFont(){
       this@Scope.font = fontModifier?: parent?.font?: Fonts.def
+      this@Scope.fontIsItalic = isItalic ?: parent?.fontIsItalic ?: false
       this@Scope.fontColor = colorModifier?: parent?.fontColor?: Color.white
       this@Scope.fontScale = scaleModifier?: parent?.fontScale?: 1f
     }
@@ -181,7 +183,9 @@ abstract class RendererContext protected constructor(
 
   fun withScope(
     box: Markdown.Box,
-    drawProvider: Prov<MarkdownDraw>? = box.background?.let{ Prov{ DrawImg.get(box.background) } },
+    drawProvider: Prov<MarkdownDraw>? = box.background?.let{ Prov{ DrawImg.get(box.background).also {
+      it.drawTiming = Markdown.DrawTiming.PREVIOUSLY
+    } } },
     boundX: Float = (currentScope?.boundX ?: 0f) - box.paddingRight,
     fillX: Boolean = false,
     inlineBreak: Boolean = false,
@@ -204,7 +208,9 @@ abstract class RendererContext protected constructor(
 
   fun insertScope(
     box: Markdown.Box,
-    drawProvider: Prov<MarkdownDraw>? = box.background?.let{ Prov{ DrawImg.get(box.background) } },
+    drawProvider: Prov<MarkdownDraw>? = box.background?.let{ Prov{ DrawImg.get(box.background).also {
+      it.drawTiming = Markdown.DrawTiming.PREVIOUSLY
+    } } },
     boundX: Float = (currentScope?.boundX ?: 0f) - box.paddingRight,
     fillX: Boolean = false,
     inlineBreak: Boolean = false,
