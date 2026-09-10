@@ -15,16 +15,12 @@ open class DrawStr internal constructor() : Markdown.MarkdownDraw() {
     fun get(
       str: String,
       font: Font,
-      fontOffsetX: Float,
-      fontOffsetY: Float,
       italic: Boolean,
       color: Color,
       scl: Float,
     ): DrawStr = Pools.obtain(DrawStr::class.java) { DrawStr() }.apply {
       this.text = str
       this.font = font
-      this.fontOffX = fontOffsetX
-      this.fontOffY = fontOffsetY
       this.italic = italic
       this.scl = scl
       this.color = color
@@ -33,8 +29,6 @@ open class DrawStr internal constructor() : Markdown.MarkdownDraw() {
 
   var text: String = ""
   var font: Font = Fonts.def
-  var fontOffX: Float = 0f
-  var fontOffY: Float = 0f
   var italic: Boolean = false
   var scl: Float = 0f
   var color: Color = Color.white
@@ -47,8 +41,6 @@ open class DrawStr internal constructor() : Markdown.MarkdownDraw() {
     super.reset()
     text = ""
     font = Fonts.def
-    fontOffX = 0f
-    fontOffY = 0f
     italic = false
     scl = 0f
     color = Color.white
@@ -100,12 +92,12 @@ open class DrawStr internal constructor() : Markdown.MarkdownDraw() {
           .translate(x + offsetX, y - offsetY)
           .mul(affineTrans.set(affine2.idt().shear(0.25f, 0f)))
       )
-      cache.setPosition(fontOffX, fontOffY)
+      cache.setPosition(0f, 0f)
       cache.draw()
       Draw.trans(last)
     }
     else {
-      cache.setPosition(x + offsetX + fontOffX, y - offsetY + fontOffY)
+      cache.setPosition(x + offsetX, y - offsetY)
       cache.draw()
     }
     if (shouldDistanceField) Draw.shader()

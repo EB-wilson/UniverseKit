@@ -24,12 +24,12 @@ import androidx.annotation.RequiresApi;
 import dalvik.system.VMRuntime;
 import sun.misc.Unsafe;
 
+import java.io.IOException;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.*;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 
 @RequiresApi(Build.VERSION_CODES.P)
@@ -50,7 +50,7 @@ public final class HiddenApiBypass {
     static {
         try {
             unsafe = (Unsafe) Unsafe.class.getDeclaredMethod("getUnsafe").invoke(null);
-            long[] data = Helper.getCachedOffsetData();
+            var data = Helper.getCachedOffsetData();
             if (data == null) {
                 data = readOffsetDataIO();
                 Helper.setCachedOffsetData(data);
@@ -61,7 +61,7 @@ public final class HiddenApiBypass {
             methodsOffset = data[3];
             iFieldOffset = data[4];
             sFieldOffset = data[5];
-            long[] dataRT = readOffsetDataRT();
+            var dataRT = readOffsetDataRT();
             artMethodSize = dataRT[0];
             artMethodBias = dataRT[1];
             artFieldSize = dataRT[2];
@@ -73,32 +73,54 @@ public final class HiddenApiBypass {
     }
 
     private static long[] readOffsetDataIO() throws ReflectiveOperationException {
+        try {
+            return readOffsetDataDex();
+        } catch (IOException | ReflectiveOperationException | RuntimeException ignored) {
+
+        }
+        return readOffsetDataClassLoader();
+    }
+
+    private static long[] readOffsetDataDex() throws IOException, ReflectiveOperationException {
+        var scanner = new DexFieldLayout();
+        scanner.scanPath(CoreOjClassLoader.getCoreOjPath());
+        var executable = scanner.layoutOf(DexFieldLayout.EXECUTABLE);
+        var methodHandle = scanner.layoutOf(DexFieldLayout.METHOD_HANDLE);
+        var classClass = scanner.layoutOf(DexFieldLayout.CLASS);
+
+        var data = new long[6];
+        data[0] = executable.offsetOf("artMethod");
+        data[1] = executable.offsetOf("declaringClass");
+        data[2] = methodHandle.offsetOf("artFieldOrMethod");
+        data[3] = classClass.offsetOf("methods");
+        if (classClass.hasField("fields")) {
+            data[4] = classClass.offsetOf("fields");
+            data[5] = data[4];
+        } else {
+            data[4] = classClass.offsetOf("iFields");
+            data[5] = classClass.offsetOf("sFields");
+        }
+        return data;
+    }
+
+    private static long[] readOffsetDataClassLoader() throws ReflectiveOperationException {
         ClassLoader bootClassloader = new CoreOjClassLoader();
         Class<?> executableClass = bootClassloader.loadClass(Executable.class.getName());
         Class<?> methodHandleClass = bootClassloader.loadClass(MethodHandle.class.getName());
         Class<?> classClass = bootClassloader.loadClass(Class.class.getName());
-        long methodOffset = unsafe.objectFieldOffset(executableClass.getDeclaredField("artMethod"));
-        long classOffset = unsafe.objectFieldOffset(executableClass.getDeclaredField("declaringClass"));
-        long artOffset = unsafe.objectFieldOffset(methodHandleClass.getDeclaredField("artFieldOrMethod"));
-        long methodsOffset = unsafe.objectFieldOffset(classClass.getDeclaredField("methods"));
 
-        long iFieldOffset;
-        long sFieldOffset;
+        var data = new long[6];
+        data[0] = unsafe.objectFieldOffset(executableClass.getDeclaredField("artMethod"));
+        data[1] = unsafe.objectFieldOffset(executableClass.getDeclaredField("declaringClass"));
+        data[2] = unsafe.objectFieldOffset(methodHandleClass.getDeclaredField("artFieldOrMethod"));
+        data[3] = unsafe.objectFieldOffset(classClass.getDeclaredField("methods"));
         try {
-            iFieldOffset = unsafe.objectFieldOffset(classClass.getDeclaredField("fields"));
-            sFieldOffset = iFieldOffset;
+            data[4] = unsafe.objectFieldOffset(classClass.getDeclaredField("fields"));
+            data[5] = data[4];
         } catch (NoSuchFieldException e) {
-            iFieldOffset = unsafe.objectFieldOffset(classClass.getDeclaredField("iFields"));
-            sFieldOffset = unsafe.objectFieldOffset(classClass.getDeclaredField("sFields"));
+            data[4] = unsafe.objectFieldOffset(classClass.getDeclaredField("iFields"));
+            data[5] = unsafe.objectFieldOffset(classClass.getDeclaredField("sFields"));
         }
-
-        long[] data = new long[6];
-        data[0] = methodOffset;
-        data[1] = classOffset;
-        data[2] = artOffset;
-        data[3] = methodsOffset;
-        data[4] = iFieldOffset;
-        data[5] = sFieldOffset;
         return data;
     }
 
@@ -112,8 +134,8 @@ public final class HiddenApiBypass {
         long aAddr = unsafe.getLong(mhA, artOffset);
         long bAddr = unsafe.getLong(mhB, artOffset);
         long aMethods = unsafe.getLong(Helper.NeverCall.class, methodsOffset);
-        long artMethodSize = bAddr - aAddr;
-        long artMethodBias = aAddr - aMethods - artMethodSize;
+        var artMethodSize = bAddr - aAddr;
+        var artMethodBias = aAddr - aMethods - artMethodSize;
 
         Field fI = Helper.NeverCall.class.getDeclaredField("i");
         Field fJ = Helper.NeverCall.class.getDeclaredField("j");
@@ -124,8 +146,8 @@ public final class HiddenApiBypass {
         long iAddr = unsafe.getLong(mhI, artOffset);
         long jAddr = unsafe.getLong(mhJ, artOffset);
         long iFields = unsafe.getLong(Helper.NeverCall.class, iFieldOffset);
-        long artFieldSize = jAddr - iAddr;
-        long artFieldBias = iAddr - iFields;
+        var artFieldSize = jAddr - iAddr;
+        var artFieldBias = iAddr - iFields;
 
         long[] data = new long[4];
         data[0] = artMethodSize;
@@ -201,17 +223,17 @@ public final class HiddenApiBypass {
      */
     @NonNull
     public static List<Executable> getDeclaredMethods(@NonNull Class<?> clazz) {
-        if (clazz.isPrimitive() || clazz.isArray()) return Collections.emptyList();
+        if (clazz.isPrimitive() || clazz.isArray()) return List.of();
         MethodHandle mh;
         try {
             Method mA = Helper.NeverCall.class.getDeclaredMethod("a");
             mA.setAccessible(true);
             mh = MethodHandles.lookup().unreflect(mA);
         } catch (NoSuchMethodException | IllegalAccessException e) {
-            return Collections.emptyList();
+            return List.of();
         }
         long methods = unsafe.getLong(clazz, methodsOffset);
-        if (methods == 0) return Collections.emptyList();
+        if (methods == 0) return List.of();
         int numMethods = unsafe.getInt(methods);
         List<Executable> list = new ArrayList<>(numMethods);
         for (int i = 0; i < numMethods; i++) {
@@ -284,17 +306,17 @@ public final class HiddenApiBypass {
      */
     @NonNull
     public static List<Field> getInstanceFields(@NonNull Class<?> clazz) {
-        if (clazz.isPrimitive() || clazz.isArray()) return Collections.emptyList();
+        if (clazz.isPrimitive() || clazz.isArray()) return List.of();
         MethodHandle mh;
         try {
             Field fI = Helper.NeverCall.class.getDeclaredField("i");
             fI.setAccessible(true);
             mh = MethodHandles.lookup().unreflectGetter(fI);
         } catch (IllegalAccessException | NoSuchFieldException e) {
-            return Collections.emptyList();
+            return List.of();
         }
         long fields = unsafe.getLong(clazz, iFieldOffset);
-        if (fields == 0) return Collections.emptyList();
+        if (fields == 0) return List.of();
         int numFields = unsafe.getInt(fields);
         List<Field> list = new ArrayList<>(numFields);
         for (int i = 0; i < numFields; i++) {
@@ -315,17 +337,17 @@ public final class HiddenApiBypass {
      */
     @NonNull
     public static List<Field> getStaticFields(@NonNull Class<?> clazz) {
-        if (clazz.isPrimitive() || clazz.isArray()) return Collections.emptyList();
+        if (clazz.isPrimitive() || clazz.isArray()) return List.of();
         MethodHandle mh;
         try {
             Field fS = Helper.NeverCall.class.getDeclaredField("s");
             fS.setAccessible(true);
             mh = MethodHandles.lookup().unreflectGetter(fS);
         } catch (IllegalAccessException | NoSuchFieldException e) {
-            return Collections.emptyList();
+            return List.of();
         }
         long fields = unsafe.getLong(clazz, sFieldOffset);
-        if (fields == 0) return Collections.emptyList();
+        if (fields == 0) return List.of();
         int numFields = unsafe.getInt(fields);
         List<Field> list = new ArrayList<>(numFields);
         for (int i = 0; i < numFields; i++) {
@@ -343,7 +365,7 @@ public final class HiddenApiBypass {
      *
      * @param signaturePrefixes A list of class signature prefixes. Each item in the list is a prefix match on the type
      *                          signature of a blacklisted API. All matching APIs are treated as if they were on
-     *                          the whitelist: access permitted, and no logging..
+     *                          the whitelist: access permitted, and no logging.
      * @return whether the operation is successful
      */
     public static boolean setHiddenApiExemptions(@NonNull String... signaturePrefixes) {
@@ -362,9 +384,13 @@ public final class HiddenApiBypass {
      *
      * @param signaturePrefixes A list of class signature prefixes. Each item in the list is a prefix match on the type
      *                          signature of a blacklisted API. All matching APIs are treated as if they were on
-     *                          the whitelist: access permitted, and no logging..
+     *                          the whitelist: access permitted, and no logging.
      * @return whether the operation is successful
+     *
+     * @deprecated {@link VMRuntime#setHiddenApiExemptions(String[])} cannot be called more than once.
+     * In a future Android release that will either be no-op or throw an exception.
      */
+    @Deprecated
     public static boolean addHiddenApiExemptions(String... signaturePrefixes) {
         Helper.signaturePrefixes.addAll(Arrays.asList(signaturePrefixes));
         String[] strings = new String[Helper.signaturePrefixes.size()];
@@ -378,7 +404,11 @@ public final class HiddenApiBypass {
      * running this method will not restore the restriction on it.
      *
      * @return whether the operation is successful
+     *
+     * @deprecated {@link VMRuntime#setHiddenApiExemptions(String[])} cannot be called more than once.
+     * In a future Android release that will either be no-op or throw an exception.
      */
+    @Deprecated
     public static boolean clearHiddenApiExemptions() {
         Helper.signaturePrefixes.clear();
         return setHiddenApiExemptions();

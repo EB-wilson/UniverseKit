@@ -17,6 +17,7 @@ import arc.util.Log
 import arc.util.Scaling
 import mindustry.gen.Building
 import mindustry.gen.Bullet
+import mindustry.gen.Icon
 import mindustry.gen.Tex
 import mindustry.gen.Unit
 import mindustry.gen.UnitEntity
@@ -138,8 +139,7 @@ open class BaseProvider: MarkdownProvider, CurtainProvider, InsProvider, Striket
       ){ s ->
         val draw = DrawUrl.get(
           s.toString(), node.destination,
-          font, fontOffsetX, fontOffsetY,
-          fontIsItalic, fontColor, fontScale,
+          font, fontIsItalic, fontColor, fontScale,
           mdStyle.linkOverColor
         )
         draw(draw)
@@ -213,8 +213,6 @@ open class BaseProvider: MarkdownProvider, CurtainProvider, InsProvider, Striket
           draw(DrawStr.get(
             "${format(n)}.",
             font,
-            fontOffsetX,
-            fontOffsetY,
             false,
             fontColor,
             fontScale
@@ -285,6 +283,9 @@ open class BaseProvider: MarkdownProvider, CurtainProvider, InsProvider, Striket
       resolveResource(url) { input ->
         var resource: Drawable? = null
         val res = object : BaseDrawable(){
+          override fun getMinWidth() = (resource ?: mdStyle.loadingImg).minWidth
+          override fun getMinHeight() = (resource ?: mdStyle.loadingImg).minHeight
+
           override fun draw(x: Float, y: Float, width: Float, height: Float) {
             resource?.draw(x, y, width, height)
             ?: mdStyle.loadingImg.draw(x, y, width, height)
@@ -301,7 +302,11 @@ open class BaseProvider: MarkdownProvider, CurtainProvider, InsProvider, Striket
               mdInvalidate()
             }
           } catch (e: Exception) {
-            Core.app.post { invalidResource(url) }
+            Core.app.post {
+              resource = mdStyle.errorImg
+              mdInvalidate()
+              invalidResource(url)
+            }
             Log.err(e)
           } finally {
             input.close()

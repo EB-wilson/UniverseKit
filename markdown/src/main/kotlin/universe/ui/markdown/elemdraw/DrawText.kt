@@ -1,13 +1,33 @@
 package universe.ui.markdown.elemdraw
 
+import arc.Core
 import arc.func.Cons
 import arc.graphics.g2d.Font
 import arc.graphics.gl.Shader
 import arc.scene.ui.layout.Scl
 import universe.ui.markdown.RendererContext
+import java.text.BreakIterator
+import java.util.Locale
 
 private const val MAX_SPLITTABLE_WIDTH = 32*16
-private val wordSplitMatcher = Regex("[^a-zA-Z0-9_]")
+
+private fun findBreakBoundary(
+  text: String,
+  fromIndex: Int,
+  toIndex: Int,
+  locale: Locale = Core.bundle.locale
+): Int {
+  if (fromIndex >= toIndex) return -1
+  val it = BreakIterator.getLineInstance(locale)
+  it.setText(text)
+  var lastBoundary = -1
+  var b = it.first()
+  while (b != BreakIterator.DONE && b <= toIndex) {
+    if (b > fromIndex) lastBoundary = b
+    b = it.next()
+  }
+  return lastBoundary
+}
 
 val distanceFieldShader: Shader = createDistanceFieldShader()
 
@@ -54,8 +74,6 @@ private fun createDistanceFieldShader(): Shader {
 fun RendererContext.drawTextWrap(
   str: String,
   font: Font = getScope().font,
-  offsetX: Float = getScope().fontOffsetX,
-  offsetY: Float = getScope().fontOffsetY,
   italic: Boolean = getScope().fontIsItalic,
   scl: Float = getScope().fontScale,
   doDraw: Cons<CharSequence> = Cons{ s ->
@@ -63,8 +81,6 @@ fun RendererContext.drawTextWrap(
       DrawStr.get(
         s.toString(),
         font,
-        offsetX,
-        offsetY,
         italic,
         getScope().fontColor,
         scl,
@@ -76,38 +92,36 @@ fun RendererContext.drawTextWrap(
     val data = font.getData()
 
     var lastIndex = 0
-    var splitIndex = 0
     var currWidth = 0f
-    var splitWidth = 0f
 
     var currScope = getScope()
+
+    val locale = Locale.getDefault()
+
+    fun availWidth(): Float = currScope.boundX - currScope.currOffsetX - currScope.marginRight
     str.forEachIndexed { index, c ->
       val glyph = data.getGlyph(c)
 
-      if (wordSplitMatcher.matches(c.toString())) {
-        splitIndex = index
-        splitWidth = 0f
-      }
+      if (currWidth + glyph.xadvance * scl > availWidth()) {
+        val breakIdx = findBreakBoundary(str, lastIndex, index, locale)
+          .let { if (it <= lastIndex) index else it }
 
-      if (splitWidth + glyph.xadvance > MAX_SPLITTABLE_WIDTH) {
-        splitIndex = index
-      }
-
-      if (currWidth + glyph.xadvance*scl > currScope.boundX - currScope.currOffsetX - currScope.marginRight) {
-        val appendText = str.substring(lastIndex, splitIndex)
-        val remText = str.substring(splitIndex, index).trimStart()
+        val appendText = str.substring(lastIndex, breakIdx)
+        val remText = str.substring(breakIdx, index).trimStart()
 
         doDraw.get(appendText)
         currScope = row(Scl.scl(mdStyle.linesPadding))
 
-        lastIndex = splitIndex
-        splitIndex = index
-        splitWidth = remText.sumOf { data.getGlyph(it).xadvance }.toFloat()
-        currWidth = splitWidth*scl
+        lastIndex = breakIdx
+
+        var remWidth = 0f
+        for (ch in remText) {
+          remWidth += data.getGlyph(ch).xadvance
+        }
+        currWidth = remWidth * scl
       }
 
-      currWidth += glyph.xadvance*scl
-      splitWidth += glyph.xadvance
+      currWidth += glyph.xadvance * scl
     }
 
     if (lastIndex < str.length) {

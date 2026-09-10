@@ -17,8 +17,6 @@
 package universe.util;
 
 import android.content.Context;
-import android.content.pm.ModuleInfo;
-import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import androidx.annotation.RequiresApi;
@@ -47,8 +45,8 @@ public class Helper {
         cachedOffsetData = data;
 
         if (cacheFile == null) return;
-        try (FileOutputStream fos = new FileOutputStream(cacheFile);
-             ObjectOutputStream oos = new ObjectOutputStream(fos)) {
+        try (var fos = new FileOutputStream(cacheFile);
+             var oos = new ObjectOutputStream(fos)) {
             oos.writeUTF(Build.FINGERPRINT);
             oos.writeLong(artVersion);
             oos.writeObject(cachedOffsetData);
@@ -61,11 +59,11 @@ public class Helper {
         cacheFile = new File(context.getCacheDir(), "HiddenApiBypass");
         artVersion = getArtVersion(context);
 
-        try (FileInputStream fis = new FileInputStream(cacheFile);
-             ObjectInputStream ois = new ObjectInputStream(fis)) {
-            String fingerprint = ois.readUTF();
+        try (var fis = new FileInputStream(cacheFile);
+             var ois = new ObjectInputStream(fis)) {
+            var fingerprint = ois.readUTF();
             if (!Build.FINGERPRINT.equals(fingerprint)) return;
-            long art = ois.readLong();
+            var art = ois.readLong();
             if (artVersion != art) return;
             cachedOffsetData = (long[]) ois.readObject();
         } catch (Exception ignored) {
@@ -74,22 +72,22 @@ public class Helper {
 
     public static long getArtVersion(Context context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return -1L;
-        PackageManager pm = context.getPackageManager();
+        var pm = context.getPackageManager();
         try {
-            ModuleInfo moduleInfo = pm.getModuleInfo("com.android.art", 1);
-            String name = moduleInfo.getPackageName();
+            var moduleInfo = pm.getModuleInfo("com.android.art", 1);
+            var name = moduleInfo.getPackageName();
             if (name == null) return -2L;
-            PackageInfo info = pm.getPackageInfo(name, PackageManager.MATCH_APEX);
+            var info = pm.getPackageInfo(name, PackageManager.MATCH_APEX);
             return info.getLongVersionCode();
         } catch (PackageManager.NameNotFoundException e) {
-            try (FileReader file = new FileReader("/proc/self/mountinfo");
-                 BufferedReader reader = new BufferedReader(file)) {
-                java.util.Optional<String> line = reader.lines()
+            try (var file = new FileReader("/proc/self/mountinfo");
+                 var reader = new BufferedReader(file)) {
+                var line = reader.lines()
                         .filter(s -> s.contains(" / /apex/com.android.art@"))
                         .findAny();
                 if (!line.isPresent()) return -3L;
-                String part = line.get().split("@", 2)[1];
-                String versionStr = part.split(" ", 2)[0];
+                var part = line.get().split("@", 2)[1];
+                var versionStr = part.split(" ", 2)[0];
                 return Long.parseLong(versionStr);
             } catch (Exception e2) {
                 return -4L;

@@ -19,29 +19,28 @@ open class DataHandler: UrlHandler {
   }
 
   override fun getResource(url: String): UrlHandler.ResourceHandle {
-    val url = url.replaceFirst("data:", "")
-    val mimeMatch = MIME_TYPE_PATTERN.matchAt(url, 0)
-    val mimeEnd = mimeMatch?.range?.let { it.last + 1 }?: 0
-    val dataMatch = DATA_TYPE_PATTERN.matchAt(url, mimeEnd)
-    val dataEnd = dataMatch?.range?.let { it.last + 1 }?: mimeEnd
-
-    val dataType = dataMatch?.value
-    if (dataType == "base64,") {
-      val base64 = url.substring(dataEnd)
-
-      return Base64Handle(base64)
+    val noScheme = url.replaceFirst("data:", "")
+    val comma = noScheme.indexOf(',')
+    if (comma < 0) {
+      return StringHandle("")
     }
-    else {
-      val string = url.substring(dataEnd)
 
-      return StringHandle(string)
+    val header = noScheme.take(comma)
+    val payload = noScheme.substring(comma + 1)
+
+    val isBase64 = header.split(';').any { it.equals("base64", ignoreCase = true) }
+
+    return if (isBase64) {
+      Base64Handle(payload)
+    } else {
+      StringHandle(payload)
     }
   }
 
   class Base64Handle(
-    val base64: String
+    val payload: String
   ): UrlHandler.ResourceHandle() {
-    override fun openStream() = Base64.getDecoder().wrap(base64.byteInputStream())
+    override fun openStream() = Base64.getDecoder().wrap(payload.trim().byteInputStream())
   }
 
   class StringHandle(

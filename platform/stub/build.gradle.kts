@@ -3,6 +3,12 @@ plugins {
 }
 
 java {
-    sourceCompatibility = JavaVersion.VERSION_1_8
-    targetCompatibility = JavaVersion.VERSION_1_8
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+tasks.withType<JavaCompile>().configureEach {
+    options.compilerArgs.addAll(
+        listOf("--patch-module", "jdk.unsupported=" + file("src/main/java").path)
+    )
 }

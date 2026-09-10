@@ -35,14 +35,14 @@ dependencies {
 
 java {
   withSourcesJar()
-  sourceCompatibility = JavaVersion.VERSION_1_8
-  targetCompatibility = JavaVersion.VERSION_1_8
+  sourceCompatibility = JavaVersion.VERSION_17
+  targetCompatibility = JavaVersion.VERSION_17
 }
 
 kotlin {
   jvmToolchain(21)
   
   compilerOptions {
-    jvmTarget.set(JvmTarget.JVM_1_8)
+    jvmTarget.set(JvmTarget.JVM_17)
   }
 }

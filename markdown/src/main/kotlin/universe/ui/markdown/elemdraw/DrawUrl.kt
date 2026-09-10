@@ -21,8 +21,6 @@ open class DrawUrl: Markdown.MarkdownDraw(), Markdown.ActivityDrawer {
       str: String,
       url: String,
       font: Font,
-      fontOffsetX: Float,
-      fontOffsetY: Float,
       italic: Boolean = false,
       color: Color,
       scl: Float,
@@ -31,8 +29,6 @@ open class DrawUrl: Markdown.MarkdownDraw(), Markdown.ActivityDrawer {
       this.text = str
       this.url = url
       this.font = font
-      this.fontOffX = fontOffsetX
-      this.fontOffY = fontOffsetY
       this.italic = italic
       this.color = color
       this.scl = scl
@@ -43,8 +39,6 @@ open class DrawUrl: Markdown.MarkdownDraw(), Markdown.ActivityDrawer {
   var text: String = ""
   var url: String = ""
   var font: Font = Fonts.def
-  var fontOffX: Float = 0f
-  var fontOffY: Float = 0f
   var italic: Boolean = false
   var color: Color = Color.white
   var scl: Float = 0f
@@ -59,15 +53,13 @@ open class DrawUrl: Markdown.MarkdownDraw(), Markdown.ActivityDrawer {
     text = ""
     url = ""
     font = Fonts.def
-    fontOffX = 0f
-    fontOffY = 0f
     color = Color.white
     scl = 0f
     overColor = Color.white
   }
 
-  override fun prefWidth(): Float = button.width + fontOffX*scl
-  override fun prefHeight(): Float = button.height + fontOffY*scl
+  override fun prefWidth(): Float = button.width
+  override fun prefHeight(): Float = button.height
 
   override fun setup(scope: RendererContext.Scope) {
     button = object: TextButton(text, makeStyle()){

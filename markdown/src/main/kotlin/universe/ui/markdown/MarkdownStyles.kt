@@ -71,6 +71,7 @@ object MarkdownStyles {
 
   fun makeDefault(): MarkdownStyle = MarkdownStyle().apply {
     loadingImg = Tex.nomap
+    errorImg = Tex.nomap
 
     linesPadding = 16f
     paragraphPadding = 32f

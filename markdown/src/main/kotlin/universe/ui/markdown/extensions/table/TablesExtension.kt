@@ -4,14 +4,14 @@ import org.commonmark.Extension
 import org.commonmark.ext.gfm.tables.internal.TableBlockParser
 import org.commonmark.parser.Parser
 import universe.ui.markdown.MDLayoutRenderer
-
 class TablesExtension private constructor() : Parser.ParserExtension, MDLayoutRenderer.DrawRendererExtension {
   companion object {
+    const val MAX_CELLS = 200
     fun create(): Extension = TablesExtension()
   }
 
   override fun extend(parserBuilder: Parser.Builder) {
-    parserBuilder.customBlockParserFactory(TableBlockParser.Factory())
+    parserBuilder.customBlockParserFactory(TableBlockParser.Factory(MAX_CELLS))
   }
 
   override fun extend(rendererBuilder: MDLayoutRenderer.Builder) {

@@ -277,6 +277,7 @@ open class Markdown : WidgetGroup {
     }
 
     var loadingImg: Drawable = defaultDraw
+    var errorImg: Drawable = defaultDraw
 
     //globals
     var linesPadding: Float = 0f
