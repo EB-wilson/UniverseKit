@@ -58,6 +58,7 @@ interface MarkdownProvider {
 
   fun extensions(): List<Extension>
   fun urlHandlers(): List<UrlHandler>
+  fun defaultUrlHandler(): UrlHandler
 
   fun handleLayoutException(exception: Throwable)
 

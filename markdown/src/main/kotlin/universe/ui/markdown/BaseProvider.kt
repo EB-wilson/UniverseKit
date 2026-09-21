@@ -65,6 +65,8 @@ open class BaseProvider: MarkdownProvider, CurtainProvider, InsProvider, Striket
     DataHandler(),
   )
 
+  override fun defaultUrlHandler(): UrlHandler = HttpHandler()
+
   override fun handleLayoutException(exception: Throwable) {
     Log.err("Markdown layout error, detail info: ", exception)
   }

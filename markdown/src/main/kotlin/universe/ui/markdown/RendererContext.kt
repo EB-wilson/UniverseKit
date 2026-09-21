@@ -33,6 +33,7 @@ abstract class RendererContext protected constructor(
   private val urlHandlers: Map<String, UrlHandler> = element.provider.urlHandlers()
     .flatMap { h -> h.matchedSchemes().map { it to h } }
     .toMap()
+  private val defaultUrlHandler: UrlHandler = element.provider.defaultUrlHandler()
 
   val prefWidth: Float get() = rootScope?.let { it.width + it.paddingLeft + it.paddingRight}?:0f
   val prefHeight: Float get() = rootScope?.let { it.height + it.paddingTop + it.paddingBottom}?:0f
@@ -125,7 +126,7 @@ abstract class RendererContext protected constructor(
 
   private fun resolveUrlHandler(url: String): UrlHandler {
     val schemeMatch = SCHEME_TYPE_PATTERN.matchAt(url, 0)
-    val scheme = schemeMatch?.value?.trimEnd(':')?:"https"
+    val scheme = schemeMatch?.value?.trimEnd(':')?: return defaultUrlHandler
 
     return urlHandlers[scheme]?: throw IllegalArgumentException("Unknown scheme type: $scheme")
   }

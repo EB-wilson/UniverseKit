@@ -28,7 +28,7 @@ interface UrlHandler {
       currStream = null
     }
 
-    internal abstract fun openStream(): InputStream
+    abstract fun openStream(): InputStream
   }
 
   class ByteArrayHandle(
